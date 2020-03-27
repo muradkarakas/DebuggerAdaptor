@@ -6,7 +6,7 @@ import { readFileSync } from 'fs';
 import { EventEmitter } from 'events';
 import { ChildProcess } from 'child_process';
 
-const { spawnSync } = require('child_process');
+const { spawn } = require('child_process');
 
 export interface MockBreakpoint {
 	id: number;
@@ -56,12 +56,14 @@ export class MockRuntime extends EventEmitter {
 			cwd: 'C:\\projects\\Sodium\\Setup\\',
 			stdio: ['pipe', 'pipe', 'pipe']
 		  };
-		this.SodiumDebuggerProcess = spawnSync('C:\\projects\\Sodium\\Setup\\SodiumDebugger.exe', [], defaults);
 
+		this.SodiumDebuggerProcess = spawn('C:\\projects\\Sodium\\Setup\\SodiumDebugger.exe', [], defaults);
 		this.SodiumDebuggerProcess.stdin.setDefaultEncoding("ASCII");
-
-		this.SodiumDebuggerProcess.stdin.write("attach 92368;\r\n");
-		this.SodiumDebuggerProcess.stdin.end();
+		var that = this;
+		setTimeout(function() {
+			that.SodiumDebuggerProcess.stdin.write("attach 1;\r\n");
+			that.SodiumDebuggerProcess.stdin.end();
+		}, 2200);
 
 		this.SodiumDebuggerProcess.stdout.on('data', (data) => {
 			console.log(data.toString());
