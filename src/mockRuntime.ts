@@ -196,7 +196,7 @@ export class MockRuntime extends EventEmitter {
 	 * Clear all breakpoints for file.
 	 */
 	public clearBreakpoints(path: string): void {
-		this._breakPoints.delete(path);
+		this._breakPoints.delete(path);;
 	}
 
 	/*
