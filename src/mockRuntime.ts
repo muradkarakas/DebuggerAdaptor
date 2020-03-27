@@ -61,9 +61,9 @@ export class MockRuntime extends EventEmitter {
 		this.SodiumDebuggerProcess.stdin.setDefaultEncoding("ASCII");
 		var that = this;
 		setTimeout(function() {
-			that.SodiumDebuggerProcess.stdin.write("attach 1;\r\n");
+			that.SodiumDebuggerProcess.stdin.write("attach 92479;\r\n");
 			that.SodiumDebuggerProcess.stdin.end();
-		}, 2200);
+		}, 2500);
 
 		this.SodiumDebuggerProcess.stdout.on('data', (data) => {
 			console.log(data.toString());
