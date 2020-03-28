@@ -61,8 +61,8 @@ export class MockDebugSession extends LoggingDebugSession {
 		super("mock-debug.txt");
 
 		// this debugger uses zero-based lines and columns
-		this.setDebuggerLinesStartAt1(false);
-		this.setDebuggerColumnsStartAt1(false);
+		this.setDebuggerLinesStartAt1(true);
+		this.setDebuggerColumnsStartAt1(true);
 
 		this._runtime = new MockRuntime();
 
@@ -101,6 +101,41 @@ export class MockDebugSession extends LoggingDebugSession {
 		this._runtime.on('end', () => {
 			this.sendEvent(new TerminatedEvent());
 		});
+	}
+
+	protected attachRequest(response: DebugProtocol.AttachResponse, args: DebugProtocol.AttachRequestArguments, request?: DebugProtocol.Request): void {
+		this._runtime.sendAttachRequestToSodiumServer();
+	}
+
+	protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void {
+
+		if (args.breakpoints) {
+			for(let i=0; i < args.breakpoints.length; i++) {
+				if (args.source.path) {
+					this._runtime.setBreakPoint(args.source.path, args.breakpoints[i].line);
+				}
+			}
+		}
+
+		const path = <string>args.source.path;
+		const clientLines = args.lines || [];
+
+		// clear all breakpoints for this file
+		this._runtime.clearBreakpoints(path);
+
+		// set and verify breakpoint locations
+		const actualBreakpoints = clientLines.map(l => {
+			let { verified, line, id } = this._runtime.setBreakPoint(path, this.convertClientLineToDebugger(l));
+			const bp = <DebugProtocol.Breakpoint> new Breakpoint(verified, this.convertDebuggerLineToClient(line));
+			bp.id= id;
+			return bp;
+		});
+
+		// send back the actual breakpoint positions
+		response.body = {
+			breakpoints: actualBreakpoints
+		};
+		this.sendResponse(response);
 	}
 
 	protected disconnectRequest(response: DebugProtocol.DisconnectResponse, args: DebugProtocol.DisconnectArguments, request?: DebugProtocol.Request): void {
@@ -183,33 +218,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		// start the program in the runtime
 		this._runtime.start(args.program, !!args.stopOnEntry);
 
-		this.sendResponse(response);
-	}
-
-	protected attachRequest(response: DebugProtocol.AttachResponse, args: DebugProtocol.AttachRequestArguments, request?: DebugProtocol.Request): void {
-		this._runtime.sendAttachRequestToSodiumServer();
-	}
-
-	protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void {
-
-		const path = <string>args.source.path;
-		const clientLines = args.lines || [];
-
-		// clear all breakpoints for this file
-		this._runtime.clearBreakpoints(path);
-
-		// set and verify breakpoint locations
-		const actualBreakpoints = clientLines.map(l => {
-			let { verified, line, id } = this._runtime.setBreakPoint(path, this.convertClientLineToDebugger(l));
-			const bp = <DebugProtocol.Breakpoint> new Breakpoint(verified, this.convertDebuggerLineToClient(line));
-			bp.id= id;
-			return bp;
-		});
-
-		// send back the actual breakpoint positions
-		response.body = {
-			breakpoints: actualBreakpoints
-		};
 		this.sendResponse(response);
 	}
 

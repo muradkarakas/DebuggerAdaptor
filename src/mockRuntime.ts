@@ -47,13 +47,36 @@ export class MockRuntime extends EventEmitter {
 		this.startSodiumDebuggerProcess();
 	}
 
+	/*
+	 * Set breakpoint in file with given line.
+	 */
+	public setBreakPoint(path: string, line: number) : MockBreakpoint {
+
+		this.SodiumDebuggerProcess.stdin.cork();
+		this.SodiumDebuggerProcess.stdin.write("break \"" + path + ":" + line + "\";\r\n");
+		this.SodiumDebuggerProcess.stdin.uncork();
+
+		const bp = <MockBreakpoint> { verified: false, line, id: this._breakpointId++ };
+		let bps = this._breakPoints.get(path);
+		if (!bps) {
+			bps = new Array<MockBreakpoint>();
+			this._breakPoints.set(path, bps);
+		}
+		bps.push(bp);
+
+		this.verifyBreakpoints(path);
+
+		return bp;
+	}
+
 	public killSodiumDebuggerProcess() {
 		this.SodiumDebuggerProcess.kill();
 	}
 
 	public sendAttachRequestToSodiumServer() {
+		this.SodiumDebuggerProcess.stdin.cork();
 		this.SodiumDebuggerProcess.stdin.write("attach 97163;\r\n");
-		this.SodiumDebuggerProcess.stdin.end();
+		this.SodiumDebuggerProcess.stdin.uncork();
 	}
 
 	public startSodiumDebuggerProcess() {
@@ -63,13 +86,14 @@ export class MockRuntime extends EventEmitter {
 		  };
 
 		this.SodiumDebuggerProcess = spawn('C:\\projects\\Sodium\\Setup\\SodiumDebugger.exe', [], defaults);
-		this.SodiumDebuggerProcess.stdin.setDefaultEncoding("utf-8");
+		this.SodiumDebuggerProcess.stdin.setDefaultEncoding("ASCII");
 
 		this.SodiumDebuggerProcess.stdout.on('data', (data) => {
 			console.log(data.toString());
 		});
 		this.SodiumDebuggerProcess.stderr.on('data', (data) => {
 			console.error(`stderr: ${data.toString()}`);
+			this.killSodiumDebuggerProcess();
 		});
 		this.SodiumDebuggerProcess.on('close', (code) => {
 			console.log(`child process close all stdio with code ${code}`);
@@ -158,24 +182,6 @@ export class MockRuntime extends EventEmitter {
 		}
 
 		return bps;
-	}
-
-	/*
-	 * Set breakpoint in file with given line.
-	 */
-	public setBreakPoint(path: string, line: number) : MockBreakpoint {
-
-		const bp = <MockBreakpoint> { verified: false, line, id: this._breakpointId++ };
-		let bps = this._breakPoints.get(path);
-		if (!bps) {
-			bps = new Array<MockBreakpoint>();
-			this._breakPoints.set(path, bps);
-		}
-		bps.push(bp);
-
-		this.verifyBreakpoints(path);
-
-		return bp;
 	}
 
 	/*
