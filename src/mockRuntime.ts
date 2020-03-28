@@ -5,8 +5,12 @@
 import { readFileSync } from 'fs';
 import { EventEmitter } from 'events';
 import { ChildProcess } from 'child_process';
+import { InputBoxOptions } from 'vscode';
 
 const { spawn } = require('child_process');
+
+import { SodiumUtils } from './SodiumUtils';
+
 
 export interface MockBreakpoint {
 	id: number;
@@ -19,7 +23,8 @@ export interface MockBreakpoint {
  */
 export class MockRuntime extends EventEmitter {
 
-	private SodiumDebuggerProcess: ChildProcess;
+	private SodiumSessionId: string | null = null;
+	private SodiumDebuggerProcess: ChildProcess | null = null;
 
 	// the initial (and one and only) file we are 'debugging'
 	private _sourceFile: string;
@@ -50,11 +55,15 @@ export class MockRuntime extends EventEmitter {
 	/*
 	 * Set breakpoint in file with given line.
 	 */
-	public setBreakPoint(path: string, line: number) : MockBreakpoint {
-
-		this.SodiumDebuggerProcess.stdin.cork();
-		this.SodiumDebuggerProcess.stdin.write("break \"" + path + ":" + line + "\";\r\n");
-		this.SodiumDebuggerProcess.stdin.uncork();
+	public setBreakPoint(path: string, line: number) : MockBreakpoint
+	{
+		if (this.SodiumDebuggerProcess) {
+			this.SodiumDebuggerProcess.stdin.cork();
+		   	this.SodiumDebuggerProcess.stdin.write("break \"" + path + ":" + line + "\";\r\n");
+		   	this.SodiumDebuggerProcess.stdin.uncork();
+		} else {
+			this.sendEvent('end');
+		}
 
 		const bp = <MockBreakpoint> { verified: false, line, id: this._breakpointId++ };
 		let bps = this._breakPoints.get(path);
@@ -70,40 +79,79 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	public killSodiumDebuggerProcess() {
-		this.SodiumDebuggerProcess.kill();
+		if (this.SodiumDebuggerProcess) {
+			this.SodiumDebuggerProcess.kill();
+			this.SodiumDebuggerProcess = null;
+		} else {
+			this.sendEvent('end');
+		}
 	}
 
 	public sendAttachRequestToSodiumServer() {
-		this.SodiumDebuggerProcess.stdin.cork();
-		this.SodiumDebuggerProcess.stdin.write("attach 97163;\r\n");
-		this.SodiumDebuggerProcess.stdin.uncork();
+		if (this.SodiumDebuggerProcess){
+			this.SodiumDebuggerProcess.stdin.cork();
+			this.SodiumDebuggerProcess.stdin.write("attach " + this.SodiumSessionId + ";\r\n");
+			this.SodiumDebuggerProcess.stdin.uncork();
+		} else {
+			this.sendEvent('end');
+		}
+	}
+
+	public isSodiumDebuggerProcessAvailable(): ChildProcess | null {
+		return this.SodiumDebuggerProcess;
+	}
+
+	public async GetSodiumSessionId() {
+		let options: InputBoxOptions = {
+			prompt: "Sodium Session Id: ",
+			placeHolder: "ex: 75254"
+		}
+		this.SodiumSessionId = await SodiumUtils.GetInput(options);
 	}
 
 	public startSodiumDebuggerProcess() {
 		const defaults = {
 			cwd: 'C:\\projects\\Sodium\\Setup\\',
+			env: process.env,
 			stdio: ['pipe', 'pipe', 'pipe']
 		  };
 
 		this.SodiumDebuggerProcess = spawn('C:\\projects\\Sodium\\Setup\\SodiumDebugger.exe', [], defaults);
-		this.SodiumDebuggerProcess.stdin.setDefaultEncoding("ASCII");
+		if (this.SodiumDebuggerProcess) {
+			this.SodiumDebuggerProcess.stdin.setDefaultEncoding("ASCII");
 
-		this.SodiumDebuggerProcess.stdout.on('data', (data) => {
-			console.log(data.toString());
-		});
-		this.SodiumDebuggerProcess.stderr.on('data', (data) => {
-			console.error(`stderr: ${data.toString()}`);
-			this.killSodiumDebuggerProcess();
-		});
-		this.SodiumDebuggerProcess.on('close', (code) => {
-			console.log(`child process close all stdio with code ${code}`);
-		});
-		this.SodiumDebuggerProcess.on('exit', (code) => {
-			console.log(`child process exited with code ${code}`);
-		});
-		this.SodiumDebuggerProcess.on('message', (m) => {
-			console.log('CHILD got message:', m);
-		});
+			this.SodiumDebuggerProcess.stdout.on('data', (data) => {
+				console.log(data.toString());
+			});
+			this.SodiumDebuggerProcess.stderr.on('data', (data) => {
+				console.error(`stderr: ${data.toString()}`);
+				this.killSodiumDebuggerProcess();
+			});
+			this.SodiumDebuggerProcess.on('close', (code) => {
+				this.sendEvent('end');
+				this.SodiumDebuggerProcess = null;
+				console.log(`Communication between IDE and Sodium Debugger lost with code ${code}`);
+			});
+			this.SodiumDebuggerProcess.on('exit', (code) => {
+				this.sendEvent('end');
+				this.SodiumDebuggerProcess = null;
+				switch(code) {
+					case 10: {
+						console.log(`Sodium Server is not running or not accessible !`);
+						break;
+					}
+					defaults: {
+						console.log(`child process exited with unknown code ${code}`);
+					}
+				}
+
+			});
+			this.SodiumDebuggerProcess.on('message', (m) => {
+				console.log('CHILD got message:', m);
+			});
+		} else {
+			this.sendEvent('end');
+		}
 	}
 
 
