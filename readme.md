@@ -1,18 +1,6 @@
 # VS Code Mock Debug
 
-This is a starter sample for developing VS Code debug adapters.
-
-**Mock Debug** simulates a debug adapter for Visual Studio Code.
-It supports *step*, *continue*, *breakpoints*, *exceptions*, and
-*variable access* but it is not connected to any real debugger.
-
-The sample is meant as an educational piece showing how to implement a debug
-adapter for VS Code. It can be used as a starting point for developing a real adapter.
-
-More information about how to develop a new debug adapter can be found
-[here](https://code.visualstudio.com/docs/extensions/example-debuggers).
-Or discuss debug adapters on Gitter:
-[![Gitter Chat](https://img.shields.io/badge/chat-online-brightgreen.svg)](https://gitter.im/Microsoft/vscode)
+This is a Sodium Language VS Code debug adapters.
 
 ## Using Mock Debug
 
