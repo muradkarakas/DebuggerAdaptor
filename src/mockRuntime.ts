@@ -51,6 +51,11 @@ export class MockRuntime extends EventEmitter {
 		this.SodiumDebuggerProcess.kill();
 	}
 
+	public sendAttachRequestToSodiumServer() {
+		this.SodiumDebuggerProcess.stdin.write("attach 97163;\r\n");
+		this.SodiumDebuggerProcess.stdin.end();
+	}
+
 	public startSodiumDebuggerProcess() {
 		const defaults = {
 			cwd: 'C:\\projects\\Sodium\\Setup\\',
@@ -58,12 +63,7 @@ export class MockRuntime extends EventEmitter {
 		  };
 
 		this.SodiumDebuggerProcess = spawn('C:\\projects\\Sodium\\Setup\\SodiumDebugger.exe', [], defaults);
-		this.SodiumDebuggerProcess.stdin.setDefaultEncoding("ASCII");
-		var that = this;
-		setTimeout(function() {
-			that.SodiumDebuggerProcess.stdin.write("attach 92479;\r\n");
-			that.SodiumDebuggerProcess.stdin.end();
-		}, 2500);
+		this.SodiumDebuggerProcess.stdin.setDefaultEncoding("utf-8");
 
 		this.SodiumDebuggerProcess.stdout.on('data', (data) => {
 			console.log(data.toString());
