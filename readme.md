@@ -1,4 +1,4 @@
-# VS Code Mock Debug
+# VS Code Sodium Debugger Adaptor Extension
 
 This is a Sodium Language VS Code debug adapters.
 
