@@ -17,16 +17,16 @@ const runMode: 'external' | 'server' | 'inline' = 'inline';
 
 export function activate(context: vscode.ExtensionContext) {
 
-	context.subscriptions.push(vscode.commands.registerCommand('extension.mock-debug.getProgramName', config => {
+	context.subscriptions.push(vscode.commands.registerCommand('extension.sodium-debug.getProgramName', config => {
 		return vscode.window.showInputBox({
 			placeHolder: "Please enter the name of a markdown file in the workspace folder",
 			value: "readme.md"
 		});
 	}));
 
-	// register a configuration provider for 'mock' debug type
+	// register a configuration provider for 'sodium' debug type
 	const provider = new MockConfigurationProvider();
-	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('mock', provider));
+	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('sodium', provider));
 
 	// debug adapters can be run in different ways by using a vscode.DebugAdapterDescriptorFactory:
 	let factory: vscode.DebugAdapterDescriptorFactory;
@@ -47,7 +47,7 @@ export function activate(context: vscode.ExtensionContext) {
 			break;
 		}
 
-	context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('mock', factory));
+	context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('sodium', factory));
 	if ('dispose' in factory) {
 		context.subscriptions.push(factory);
 	}
@@ -75,22 +75,32 @@ class MockConfigurationProvider implements vscode.DebugConfigurationProvider {
 	 */
 	resolveDebugConfiguration(folder: WorkspaceFolder | undefined, config: DebugConfiguration, token?: CancellationToken): ProviderResult<DebugConfiguration> {
 
-		// if launch.json is missing or empty
-		if (!config.type && !config.request && !config.name) {
-			const editor = vscode.window.activeTextEditor;
-			if (editor && editor.document.languageId === 'markdown') {
-				config.type = 'mock';
-				config.name = 'Launch';
-				config.request = 'launch';
-				config.program = '${file}';
-				config.stopOnEntry = true;
+		const editor = vscode.window.activeTextEditor;
+		if (editor) {
+			const fileExt = editor.document.uri.fsPath.indexOf(".sqlx");
+			if (fileExt < 0) {
+				return vscode.window.showInformationMessage("SodiumDebugger: Please open a file with 'sqlx' extension").then(_ => {
+					return undefined;	// abort launch
+				});
+			}
+			if (!config.program) {
+				config.program = editor.document.uri.fsPath;
 			}
 		}
 
-		if (!config.program) {
-			return vscode.window.showInformationMessage("Cannot find a program to debug").then(_ => {
-				return undefined;	// abort launch
-			});
+		// if launch.json is missing or empty
+		if (!config.type && !config.request && !config.name) { /* && editor.document.languageId === 'markdown'*/
+			if (editor) {
+				config.type = 'sodium';
+				config.name = 'Sodium Debugger';
+				config.request = 'attach';
+				config.program = editor.document.uri.fsPath;
+				config.stopOnEntry = true;
+			} else {
+				return vscode.window.showInformationMessage("SodiumDebugger: Open a file to debug").then(_ => {
+					return undefined;	// abort launch
+				});
+			}
 		}
 
 		return config;
