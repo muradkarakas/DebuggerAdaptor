@@ -34,6 +34,21 @@ interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	trace?: boolean;
 }
 
+/**
+ * This interface describes the mock-debug specific launch attributes
+ * (which are not part of the Debug Adapter Protocol).
+ * The schema for these attributes lives in the package.json of the mock-debug extension.
+ * The interface should always match this schema.
+ */
+interface AttachRequestArguments extends DebugProtocol.AttachRequestArguments {
+	/** An absolute path to the "program" to debug. */
+	program: string;
+	/** Automatically stop target after launch. If not specified, target does not stop. */
+	stopOnEntry?: boolean;
+	/** enable logging the Debug Adapter Protocol */
+	trace?: boolean;
+}
+
 export class MockDebugSession extends LoggingDebugSession {
 
 	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
@@ -104,15 +119,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		});
 	}
 
-	protected attachRequest(response: DebugProtocol.AttachResponse, args: DebugProtocol.AttachRequestArguments, request?: DebugProtocol.Request): void {
-		if (!this._runtime.isSodiumDebuggerProcessAvailable()) {
-			this.sendEvent(new TerminatedEvent());
-			return;
-		}
-
-		this._runtime.sendAttachRequestToSodiumServer();
-	}
-
 	protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void {
 
 		if (args.breakpoints) {
@@ -163,60 +169,85 @@ export class MockDebugSession extends LoggingDebugSession {
 	 * The 'initialize' request is the first request called by the frontend
 	 * to interrogate the features the debug adapter provides.
 	 */
-	protected initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): void {
+	protected async initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): Promise<void> {
 		let that = this;
-		this._runtime.GetSodiumSessionId().then(function() {
-			if (args.supportsProgressReporting) {
-				that._reportProgress = true;
-			}
+		await this._runtime.GetSodiumSessionId();
 
-			// build and return the capabilities of this debug adapter:
-			response.body = response.body || {};
+		if (args.supportsProgressReporting) {
+			that._reportProgress = true;
+		}
 
-			// the adapter implements the configurationDoneRequest.
-			response.body.supportsConfigurationDoneRequest = true;
+		// build and return the capabilities of this debug adapter:
+		response.body = response.body || {};
 
-			// make VS Code to use 'evaluate' when hovering over source
-			response.body.supportsEvaluateForHovers = true;
+		// the adapter implements the configurationDoneRequest.
+		response.body.supportsConfigurationDoneRequest = true;
 
-			// make VS Code to show a 'step back' button
-			response.body.supportsStepBack = true;
+		// make VS Code to use 'evaluate' when hovering over source
+		response.body.supportsEvaluateForHovers = true;
 
-			// make VS Code to support data breakpoints
-			response.body.supportsDataBreakpoints = true;
+		// make VS Code to show a 'step back' button
+		response.body.supportsStepBack = true;
 
-			// make VS Code to support completion in REPL
-			response.body.supportsCompletionsRequest = true;
-			response.body.completionTriggerCharacters = [ ".", "[" ];
+		// make VS Code to support data breakpoints
+		response.body.supportsDataBreakpoints = true;
 
-			// make VS Code to send cancelRequests
-			response.body.supportsCancelRequest = true;
+		// make VS Code to support completion in REPL
+		response.body.supportsCompletionsRequest = true;
+		response.body.completionTriggerCharacters = [ ".", "[" ];
 
-			// make VS Code send the breakpointLocations request
-			response.body.supportsBreakpointLocationsRequest = true;
+		// make VS Code to send cancelRequests
+		response.body.supportsCancelRequest = true;
 
-			that.sendResponse(response);
+		// make VS Code send the breakpointLocations request
+		response.body.supportsBreakpointLocationsRequest = true;
 
-			// since this debug adapter can accept configuration requests like 'setBreakpoint' at any time,
-			// we request them early by sending an 'initializeRequest' to the frontend.
-			// The frontend will end the configuration sequence by calling 'configurationDone' request.
-			that.sendEvent(new InitializedEvent());
-		});
+		that.sendResponse(response);
 
+		// since this debug adapter can accept configuration requests like 'setBreakpoint' at any time,
+		// we request them early by sending an 'initializeRequest' to the frontend.
+		// The frontend will end the configuration sequence by calling 'configurationDone' request.
+		that.sendEvent(new InitializedEvent());
 	}
 
 	/**
 	 * Called at the end of the configuration sequence.
 	 * Indicates that all breakpoints etc. have been sent to the DA and that the 'launch' can start.
 	 */
-	protected configurationDoneRequest(response: DebugProtocol.ConfigurationDoneResponse, args: DebugProtocol.ConfigurationDoneArguments): void {
+	protected async configurationDoneRequest(response: DebugProtocol.ConfigurationDoneResponse, args: DebugProtocol.ConfigurationDoneArguments): Promise<void> {
 		super.configurationDoneRequest(response, args);
 
-		// notify the launchRequest that configuration has finished
-		this._configurationDone.notify();
+		if (this._runtime.isSodiumDebuggerProcessAvailable()) {
+			let sessionId = this._runtime.isSodiumSessionIdSet();
+			if (sessionId) {
+				await sessionId;
+				// notify the launchRequest that configuration has finished
+				this._configurationDone.notify();
+			}
+		}
 	}
 
 	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments) {
+
+		// make sure to 'Stop' the buffered logging if 'trace' is not set
+		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
+
+		// wait until configuration has finished (and configurationDoneRequest has been called)
+		await this._configurationDone.wait(1000);
+
+		// start the program in the runtime
+		this._runtime.start(args.program, !!args.stopOnEntry);
+
+		this.sendResponse(response);
+	}
+
+	protected async attachRequest(response: DebugProtocol.AttachResponse, args: AttachRequestArguments, request?: DebugProtocol.Request): Promise<void> {
+		if (!this._runtime.isSodiumDebuggerProcessAvailable()) {
+			this.sendEvent(new TerminatedEvent());
+			return;
+		}
+
+		this._runtime.sendAttachRequestToSodiumServer();
 
 		// make sure to 'Stop' the buffered logging if 'trace' is not set
 		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);

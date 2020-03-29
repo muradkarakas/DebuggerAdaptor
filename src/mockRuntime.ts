@@ -23,7 +23,7 @@ export interface MockBreakpoint {
  */
 export class MockRuntime extends EventEmitter {
 
-	private SodiumSessionId: string | null = null;
+	private _SodiumSessionId: string | undefined = undefined;
 	private SodiumDebuggerProcess: ChildProcess | null = null;
 
 	// the initial (and one and only) file we are 'debugging'
@@ -50,6 +50,10 @@ export class MockRuntime extends EventEmitter {
 	constructor() {
 		super();
 		this.startSodiumDebuggerProcess();
+	}
+
+	public isSodiumSessionIdSet(): string | undefined {
+		return this._SodiumSessionId;
 	}
 
 	/*
@@ -90,7 +94,7 @@ export class MockRuntime extends EventEmitter {
 	public sendAttachRequestToSodiumServer() {
 		if (this.SodiumDebuggerProcess){
 			this.SodiumDebuggerProcess.stdin.cork();
-			this.SodiumDebuggerProcess.stdin.write("attach " + this.SodiumSessionId + ";\r\n");
+			this.SodiumDebuggerProcess.stdin.write("attach " + this._SodiumSessionId + ";\r\n");
 			this.SodiumDebuggerProcess.stdin.uncork();
 		} else {
 			this.sendEvent('end');
@@ -107,7 +111,7 @@ export class MockRuntime extends EventEmitter {
 			placeHolder: "ex: 75254",
 			value: "44865"
 		}
-		this.SodiumSessionId = await SodiumUtils.GetInput(options);
+		this._SodiumSessionId = await SodiumUtils.GetInput(options);
 	}
 
 	public startSodiumDebuggerProcess() {
