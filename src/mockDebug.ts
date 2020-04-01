@@ -13,7 +13,10 @@ import {
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { basename } from 'path';
 import { MockRuntime, MockBreakpoint } from './mockRuntime';
+
 const { Subject } = require('await-notify');
+
+import { SodiumUtils } from './SodiumUtils';
 
 function timeout(ms: number) {
 	return new Promise(resolve => setTimeout(resolve, ms));
@@ -125,10 +128,9 @@ export class MockDebugSession extends LoggingDebugSession {
 		const path = <string>args.source.path;
 		const clientLines = args.lines || [];
 
-		// clear all breakpoints for this file
-		clientLines.map(l => {
-			this._runtime.clearBreakpoints(path);
-		});
+		if (args.source.path) {
+			this._runtime.clearBreakpoints(args.source.path);
+		}
 
 		let actualBreakpoints: Array<any> = new Array<any>();
 		for(let i = 0; i < clientLines.length; i++) {
@@ -138,18 +140,13 @@ export class MockDebugSession extends LoggingDebugSession {
 			actualBreakpoints.push(bp);
 		}
 
-		// set and verify breakpoint locations
-		/*const actualBreakpoints = clientLines.map(l => {
-			let { verified, line, id } = this._runtime.setBreakPoint(path, this.convertClientLineToDebugger(l));
-			const bp = <DebugProtocol.Breakpoint> new Breakpoint(verified, this.convertDebuggerLineToClient(line));
-			bp.id= id;
-			return bp;
-		});*/
-
 		// send back the actual breakpoint positions
 		response.body = {
 			breakpoints: actualBreakpoints
 		};
+
+		SodiumUtils.release();
+
 		this.sendResponse(response);
 	}
 

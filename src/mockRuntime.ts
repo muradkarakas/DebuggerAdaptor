@@ -51,6 +51,63 @@ export class MockRuntime extends EventEmitter {
 		this.startSodiumDebuggerProcess();
 	}
 
+	public SetBreakPointId(id: number, file: string, line: number) {
+		let bp = this._breakPoints.get(file);
+		if (bp) {
+			for(let i=0; i < bp.length; i++) {
+				if (bp[i].line == line) {
+					bp[i].id = id;
+					break;
+				}
+			}
+		}
+	}
+
+	/*
+	 * Clear all breakpoints for file.
+	 */
+	public clearBreakpoints(path: string): void
+	{
+		if (this.SodiumDebuggerProcess) {
+			let that = this;
+			let p = SodiumUtils.WaitForStdout();
+			p.then(function () {
+				if (that.SodiumDebuggerProcess != null) {
+					that.SodiumDebuggerProcess.stdin.cork();
+					that.SodiumDebuggerProcess.stdin.write("clearallbreakpoints;\r\n");
+					that.SodiumDebuggerProcess.stdin.uncork();
+				}
+			});
+		} else {
+			this.sendEvent('end');
+		}
+
+		this._breakPoints.delete(path);;
+	}
+
+
+	/*
+	 * Clear all data breakpoints.
+	 */
+	public clearAllDataBreakpoints(): void
+	{
+		if (this.SodiumDebuggerProcess) {
+			let that = this;
+			let p = SodiumUtils.WaitForStdout();
+			p.then(function () {
+				/*if (that.SodiumDebuggerProcess != null) {
+					that.SodiumDebuggerProcess.stdin.cork();
+					that.SodiumDebuggerProcess.stdin.write("clearallbreakpoints;\r\n");
+					that.SodiumDebuggerProcess.stdin.uncork();
+				}*/
+			});
+		} else {
+			this.sendEvent('end');
+		}
+
+		this._breakAddresses.clear();
+	}
+
 	public isSodiumSessionIdSet(): string | undefined {
 		return this._SodiumSessionId;
 	}
@@ -74,15 +131,16 @@ export class MockRuntime extends EventEmitter {
 			this.sendEvent('end');
 		}
 
-		const bp = <MockBreakpoint> { verified: false, line, id: this._breakpointId++ };
+		const bp = <MockBreakpoint> { verified: false, line, id: this._breakpointId };
 		let bps = this._breakPoints.get(path);
 		if (!bps) {
 			bps = new Array<MockBreakpoint>();
 			this._breakPoints.set(path, bps);
 		}
+		this._breakpointId++;
 		bps.push(bp);
 
-		this.verifyBreakpoints(path);
+		//this.verifyBreakpoints(path);
 
 		return bp;
 	}
@@ -120,7 +178,7 @@ export class MockRuntime extends EventEmitter {
 		let options: InputBoxOptions = {
 			prompt: "Sodium Session Id: ",
 			placeHolder: "ex: 75254",
-			value: "41517"
+			value: "37357"
 		}
 		this._SodiumSessionId = await SodiumUtils.GetInput(options);
 	}
@@ -137,11 +195,20 @@ export class MockRuntime extends EventEmitter {
 			this.SodiumDebuggerProcess.stdin.setDefaultEncoding("ASCII");
 
 			this.SodiumDebuggerProcess.stdout.on('data', (data) => {
-				console.log(data.toString());
+				let reply = data.toString();
+				console.log(reply);
+				let matchedGroups = reply.match(/(?<BreakpointId>\d{1,3}) at 0x0000:  file (?<FileName>[\.:\-\w\\]+), line (?<LineNo>\d+)/);
+				if (matchedGroups) {
+					if (matchedGroups.groups) {
+						let g = matchedGroups.groups;
+						this.SetBreakPointId(parseFloat(g.BreakpointId), g.FileName, parseFloat(g.LineNo));
+					}
+				}
 				SodiumUtils.release();
 			});
 			this.SodiumDebuggerProcess.stderr.on('data', (data) => {
-				console.error(`stderr: ${data.toString()}`);
+				let reply = data.toString();
+				console.error(`stderr: ${reply}`);
 				this.killSodiumDebuggerProcess();
 			});
 			this.SodiumDebuggerProcess.on('close', (code) => {
@@ -180,7 +247,7 @@ export class MockRuntime extends EventEmitter {
 		this.loadSource(program);
 		this._currentLine = -1;
 
-		this.verifyBreakpoints(this._sourceFile);
+		//this.verifyBreakpoints(this._sourceFile);
 
 		if (stopOnEntry) {
 			// we step once
@@ -265,12 +332,6 @@ export class MockRuntime extends EventEmitter {
 		return undefined;
 	}
 
-	/*
-	 * Clear all breakpoints for file.
-	 */
-	public clearBreakpoints(path: string): void {
-		this._breakPoints.delete(path);;
-	}
 
 	/*
 	 * Set data breakpoint.
@@ -283,15 +344,7 @@ export class MockRuntime extends EventEmitter {
 		return false;
 	}
 
-	/*
-	 * Clear all data breakpoints.
-	 */
-	public clearAllDataBreakpoints(): void {
-		this._breakAddresses.clear();
-	}
-
 	// private methods
-
 	private loadSource(file: string) {
 		if (this._sourceFile !== file) {
 			this._sourceFile = file;
@@ -326,7 +379,7 @@ export class MockRuntime extends EventEmitter {
 		}
 	}
 
-	private verifyBreakpoints(path: string) : void {
+	/*private verifyBreakpoints(path: string) : void {
 		let bps = this._breakPoints.get(path);
 		if (bps) {
 			this.loadSource(path);
@@ -351,7 +404,7 @@ export class MockRuntime extends EventEmitter {
 				}
 			});
 		}
-	}
+	}*/
 
 	/**
 	 * Fire events if line has a breakpoint or the word 'exception' is found.
