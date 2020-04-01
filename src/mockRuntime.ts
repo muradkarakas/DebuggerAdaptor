@@ -11,7 +11,6 @@ const { spawn } = require('child_process');
 
 import { SodiumUtils } from './SodiumUtils';
 
-
 export interface MockBreakpoint {
 	id: number;
 	line: number;
@@ -62,9 +61,15 @@ export class MockRuntime extends EventEmitter {
 	public setBreakPoint(path: string, line: number) : MockBreakpoint
 	{
 		if (this.SodiumDebuggerProcess) {
-			this.SodiumDebuggerProcess.stdin.cork();
-		   	this.SodiumDebuggerProcess.stdin.write("break \"" + path + ":" + line + "\";\r\n");
-		   	this.SodiumDebuggerProcess.stdin.uncork();
+			let that = this;
+			let p = SodiumUtils.WaitForStdout();
+			p.then(function () {
+				if (that.SodiumDebuggerProcess != null) {
+					that.SodiumDebuggerProcess.stdin.cork();
+					that.SodiumDebuggerProcess.stdin.write("break \"" + path + ":" + line + "\";\r\n");
+					that.SodiumDebuggerProcess.stdin.uncork();
+				}
+			});
 		} else {
 			this.sendEvent('end');
 		}
@@ -93,9 +98,15 @@ export class MockRuntime extends EventEmitter {
 
 	public sendAttachRequestToSodiumServer() {
 		if (this.SodiumDebuggerProcess){
-			this.SodiumDebuggerProcess.stdin.cork();
-			this.SodiumDebuggerProcess.stdin.write("attach " + this._SodiumSessionId + ";\r\n");
-			this.SodiumDebuggerProcess.stdin.uncork();
+			let that = this;
+			let p = SodiumUtils.WaitForStdout();
+			p.then(function () {
+				if (that.SodiumDebuggerProcess != null) {
+					that.SodiumDebuggerProcess.stdin.cork();
+					that.SodiumDebuggerProcess.stdin.write("attach " + that._SodiumSessionId + ";\r\n");
+					that.SodiumDebuggerProcess.stdin.uncork();
+				}
+			});
 		} else {
 			this.sendEvent('end');
 		}
@@ -109,7 +120,7 @@ export class MockRuntime extends EventEmitter {
 		let options: InputBoxOptions = {
 			prompt: "Sodium Session Id: ",
 			placeHolder: "ex: 75254",
-			value: "44865"
+			value: "41517"
 		}
 		this._SodiumSessionId = await SodiumUtils.GetInput(options);
 	}
@@ -127,6 +138,7 @@ export class MockRuntime extends EventEmitter {
 
 			this.SodiumDebuggerProcess.stdout.on('data', (data) => {
 				console.log(data.toString());
+				SodiumUtils.release();
 			});
 			this.SodiumDebuggerProcess.stderr.on('data', (data) => {
 				console.error(`stderr: ${data.toString()}`);

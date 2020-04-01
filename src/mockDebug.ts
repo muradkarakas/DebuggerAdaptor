@@ -69,6 +69,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	private _cancelledProgressId: string | undefined = undefined;
 	private _isProgressCancellable = true;
 
+
 	/**
 	 * Creates a new debug adapter that is used for one debug session.
 	 * We configure the default implementation of a debug adapter here.
@@ -119,29 +120,31 @@ export class MockDebugSession extends LoggingDebugSession {
 		});
 	}
 
-	protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void {
-
-		if (args.breakpoints) {
-			for(let i=0; i < args.breakpoints.length; i++) {
-				if (args.source.path) {
-					this._runtime.setBreakPoint(args.source.path, args.breakpoints[i].line);
-				}
-			}
-		}
-
+	protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void
+	{
 		const path = <string>args.source.path;
 		const clientLines = args.lines || [];
 
 		// clear all breakpoints for this file
-		this._runtime.clearBreakpoints(path);
+		clientLines.map(l => {
+			this._runtime.clearBreakpoints(path);
+		});
+
+		let actualBreakpoints: Array<any> = new Array<any>();
+		for(let i = 0; i < clientLines.length; i++) {
+			let { verified, line, id } = this._runtime.setBreakPoint(path, this.convertClientLineToDebugger(clientLines[i]));
+			const bp = <DebugProtocol.Breakpoint> new Breakpoint(verified, this.convertDebuggerLineToClient(line));
+			bp.id= id;
+			actualBreakpoints.push(bp);
+		}
 
 		// set and verify breakpoint locations
-		const actualBreakpoints = clientLines.map(l => {
+		/*const actualBreakpoints = clientLines.map(l => {
 			let { verified, line, id } = this._runtime.setBreakPoint(path, this.convertClientLineToDebugger(l));
 			const bp = <DebugProtocol.Breakpoint> new Breakpoint(verified, this.convertDebuggerLineToClient(line));
 			bp.id= id;
 			return bp;
-		});
+		});*/
 
 		// send back the actual breakpoint positions
 		response.body = {
