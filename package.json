@@ -15,7 +15,7 @@
 	"engines": {
 		"vscode": "^1.43.0"
 	},
-	"icon": "images/sodium-debug-icon.png",
+	"icon": "images/sodium.ico",
 	"categories": [
 		"Debuggers"
 	],
