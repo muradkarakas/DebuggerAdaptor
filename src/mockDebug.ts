@@ -248,6 +248,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		}
 
 		this._runtime.sendAttachRequestToSodiumServer();
+		this._runtime.sourceFile = args.program;
 
 		// make sure to 'Stop' the buffered logging if 'trace' is not set
 		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);

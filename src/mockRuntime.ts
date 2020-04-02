@@ -30,6 +30,9 @@ export class MockRuntime extends EventEmitter {
 	public get sourceFile() {
 		return this._sourceFile;
 	}
+	public set sourceFile(value: string) {
+		this._sourceFile = value;
+	}
 
 	// the contents (= lines) of the one and only file
 	private _sourceLines: string[];
@@ -320,44 +323,34 @@ export class MockRuntime extends EventEmitter {
 	/**
 	 * Returns a fake 'stacktrace' where every 'stackframe' is a word from the current line.
 	 */
-	public stack(startFrame: number, endFrame: number): any {
-
-		const words = this._sourceLines[this._currentLine].trim().split(/\s+/);
-
+	public stack(startFrame: number, endFrame: number): any
+	{
 		const frames = new Array<any>();
-		// every word of the current line becomes a stack frame.
-		for (let i = startFrame; i < Math.min(endFrame, words.length); i++) {
-			const name = words[i];	// use a word of the line as the stackframe name
-			frames.push({
-				index: i,
-				name: `${name}(${i})`,
-				file: this._sourceFile,
-				line: this._currentLine
-			});
-		}
+		let frameName = 'test_Frame';
+
+		frames.push({
+			index: 1,
+			name: frameName,
+			file: this._sourceFile,
+			line: this._currentLine
+		});
+
 		return {
 			frames: frames,
-			count: words.length
+			count: frameName.length
 		};
 	}
 
-	public getBreakpoints(path: string, line: number): number[] {
-
-		const l = this._sourceLines[line];
-
-		let sawSpace = true;
+	public getBreakpoints(path: string, line: number): number[]
+	{
 		const bps: number[] = [];
-		for (let i = 0; i < l.length; i++) {
-			if (l[i] !== ' ') {
-				if (sawSpace) {
-					bps.push(i);
-					sawSpace = false;
-				}
-			} else {
-				sawSpace = true;
+		path = path.toLowerCase();
+		let bpsf = this._breakPoints.get(path);
+		if (bpsf) {
+			for (let i = 0; i < bpsf.length; i++) {
+				bps.push(bpsf[i].line);
 			}
 		}
-
 		return bps;
 	}
 
