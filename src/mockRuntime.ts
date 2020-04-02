@@ -51,12 +51,14 @@ export class MockRuntime extends EventEmitter {
 		this.startSodiumDebuggerProcess();
 	}
 
-	public SetBreakPointId(id: number, file: string, line: number) {
+	public SetBreakPointId(id: number, file: string, line: number)
+	{
 		let bp = this._breakPoints.get(file);
 		if (bp) {
 			for(let i=0; i < bp.length; i++) {
 				if (bp[i].line == line) {
 					bp[i].id = id;
+					bp[i].verified = true;
 					break;
 				}
 			}
@@ -92,7 +94,7 @@ export class MockRuntime extends EventEmitter {
 	public clearAllDataBreakpoints(): void
 	{
 		if (this.SodiumDebuggerProcess) {
-			let that = this;
+			//let that = this;
 			let p = SodiumUtils.WaitForStdout();
 			p.then(function () {
 				/*if (that.SodiumDebuggerProcess != null) {
@@ -117,6 +119,8 @@ export class MockRuntime extends EventEmitter {
 	 */
 	public setBreakPoint(path: string, line: number) : MockBreakpoint
 	{
+		path = path.toLowerCase();
+
 		if (this.SodiumDebuggerProcess) {
 			let that = this;
 			let p = SodiumUtils.WaitForStdout();
@@ -178,9 +182,56 @@ export class MockRuntime extends EventEmitter {
 		let options: InputBoxOptions = {
 			prompt: "Sodium Session Id: ",
 			placeHolder: "ex: 75254",
-			value: "37357"
+			value: "68493"
 		}
 		this._SodiumSessionId = await SodiumUtils.GetInput(options);
+	}
+
+	public StopIDEForRaisedBreakPoint(BreakpointId: number, FileName: string, LineNo: number, ProcedureName: string)
+	{
+		// is there a breakpoint?
+		const breakpoints = this._breakPoints.get(FileName.toLowerCase());
+		if (breakpoints) {
+			const bps = breakpoints.filter(bp => bp.line === LineNo);
+			if (bps.length > 0) {
+
+				// send 'stopped' event
+				this.sendEvent('stopOnBreakpoint');
+
+				// the following shows the use of 'breakpoint' events to update properties of a breakpoint in the UI
+				// if breakpoint is not yet verified, verify it now and send a 'breakpoint' update event
+				if (!bps[0].verified) {
+					bps[0].verified = true;
+					this.sendEvent('breakpointValidated', bps[0]);
+				}
+				return true;
+			}
+		}
+	}
+	public ParseDebuggerOutput(reply: string)
+	{
+		// New breakpoint response
+		let newBreakpointReplyMatched: any = reply.match(/(?<BreakpointId>\d{1,3}) at 0x0000:  file (?<FileName>[\.:\-\w\\]+), line (?<LineNo>\d+)/);
+		if (newBreakpointReplyMatched) {
+			if (newBreakpointReplyMatched.groups) {
+				let g = newBreakpointReplyMatched.groups;
+				this.SetBreakPointId(parseFloat(g.BreakpointId), g.FileName, parseFloat(g.LineNo));
+			}
+		}
+
+		// Breakpoint hit response
+		/*
+		 *  Breakpoint 2, cb_oracle.logon2oracle() at C:\projects\Sodium\Setup\Sodium-Site\welcome.sqlx:6
+		 *  C:\projects\Sodium\Setup\Sodium-Site\welcome.sqlx:6:1:beg:0x0000
+		*/
+		let breakpointHitReplyMatched: any = reply.match(/(?<BreakpointId>\d{1,3}), (?<ProcedureName>[\(\)\.:\-\w\\]+) at (?<FileName>[\.:\-\w\\]+):(?<LineNo>\d{1,3})/);
+		if (breakpointHitReplyMatched) {
+			if (breakpointHitReplyMatched.groups) {
+				let g = breakpointHitReplyMatched.groups;
+				this.StopIDEForRaisedBreakPoint(parseFloat(g.BreakpointId), g.FileName, parseFloat(g.LineNo), g.ProcedureName);
+				//this.SetBreakPointId(parseFloat(g.BreakpointId), g.FileName, parseFloat(g.LineNo));
+			}
+		}
 	}
 
 	public startSodiumDebuggerProcess() {
@@ -197,13 +248,7 @@ export class MockRuntime extends EventEmitter {
 			this.SodiumDebuggerProcess.stdout.on('data', (data) => {
 				let reply = data.toString();
 				console.log(reply);
-				let matchedGroups = reply.match(/(?<BreakpointId>\d{1,3}) at 0x0000:  file (?<FileName>[\.:\-\w\\]+), line (?<LineNo>\d+)/);
-				if (matchedGroups) {
-					if (matchedGroups.groups) {
-						let g = matchedGroups.groups;
-						this.SetBreakPointId(parseFloat(g.BreakpointId), g.FileName, parseFloat(g.LineNo));
-					}
-				}
+				this.ParseDebuggerOutput(reply);
 				SodiumUtils.release();
 			});
 			this.SodiumDebuggerProcess.stderr.on('data', (data) => {
@@ -356,27 +401,16 @@ export class MockRuntime extends EventEmitter {
 	 * Run through the file.
 	 * If stepEvent is specified only run a single step and emit the stepEvent.
 	 */
-	private run(reverse = false, stepEvent?: string) {
-		if (reverse) {
-			for (let ln = this._currentLine-1; ln >= 0; ln--) {
-				if (this.fireEventsForLine(ln, stepEvent)) {
-					this._currentLine = ln;
-					return;
-				}
+	private run(reverse = false, stepEvent?: string)
+	{
+		for (let ln = this._currentLine+1; ln < this._sourceLines.length; ln++) {
+			if (this.fireEventsForLine(ln, stepEvent)) {
+				this._currentLine = ln;
+				return true;
 			}
-			// no more lines: stop at first line
-			this._currentLine = 0;
-			this.sendEvent('stopOnEntry');
-		} else {
-			for (let ln = this._currentLine+1; ln < this._sourceLines.length; ln++) {
-				if (this.fireEventsForLine(ln, stepEvent)) {
-					this._currentLine = ln;
-					return true;
-				}
-			}
-			// no more lines: run to end
-			this.sendEvent('end');
 		}
+		// no more lines: run to end
+		this.sendEvent('end');
 	}
 
 	/*private verifyBreakpoints(path: string) : void {
@@ -410,9 +444,9 @@ export class MockRuntime extends EventEmitter {
 	 * Fire events if line has a breakpoint or the word 'exception' is found.
 	 * Returns true is execution needs to stop.
 	 */
-	private fireEventsForLine(ln: number, stepEvent?: string): boolean {
-
-		const line = this._sourceLines[ln].trim();
+	private fireEventsForLine(ln: number, stepEvent?: string): boolean
+	{
+		/*const line = this._sourceLines[ln].trim();
 
 		// if 'log(...)' found in source -> send argument to debug console
 		const matches = /log\((.*)\)/.exec(line);
@@ -461,6 +495,7 @@ export class MockRuntime extends EventEmitter {
 		}
 
 		// nothing interesting found -> continue
+		*/
 		return false;
 	}
 
