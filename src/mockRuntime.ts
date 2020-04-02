@@ -2,7 +2,7 @@
  * Copyright (C) Microsoft Corporation. All rights reserved.
  *--------------------------------------------------------*/
 
-import { readFileSync } from 'fs';
+//import { readFileSync } from 'fs';
 import { EventEmitter } from 'events';
 import { ChildProcess } from 'child_process';
 import { InputBoxOptions } from 'vscode';
@@ -34,8 +34,10 @@ export class MockRuntime extends EventEmitter {
 		this._sourceFile = value;
 	}
 
+	public BreakPointHitInfo: any;
+
 	// the contents (= lines) of the one and only file
-	private _sourceLines: string[];
+	//rivate _sourceLines: string[];
 
 	// This is the next line that will be 'executed'
 	private _currentLine = 0;
@@ -138,7 +140,7 @@ export class MockRuntime extends EventEmitter {
 			this.sendEvent('end');
 		}
 
-		const bp = <MockBreakpoint> { verified: false, line, id: this._breakpointId };
+		const bp = <MockBreakpoint> { verified: true, line, id: this._breakpointId };
 		let bps = this._breakPoints.get(path);
 		if (!bps) {
 			bps = new Array<MockBreakpoint>();
@@ -185,7 +187,7 @@ export class MockRuntime extends EventEmitter {
 		let options: InputBoxOptions = {
 			prompt: "Sodium Session Id: ",
 			placeHolder: "ex: 75254",
-			value: "68493"
+			value: "98711"
 		}
 		this._SodiumSessionId = await SodiumUtils.GetInput(options);
 	}
@@ -199,18 +201,13 @@ export class MockRuntime extends EventEmitter {
 			if (bps.length > 0) {
 
 				// send 'stopped' event
-				this.sendEvent('stopOnBreakpoint');
-
-				// the following shows the use of 'breakpoint' events to update properties of a breakpoint in the UI
-				// if breakpoint is not yet verified, verify it now and send a 'breakpoint' update event
-				if (!bps[0].verified) {
-					bps[0].verified = true;
-					this.sendEvent('breakpointValidated', bps[0]);
-				}
-				return true;
+				this.sendEvent('stopOnBreakpoint', bps[0]);
 			}
 		}
 	}
+
+
+
 	public ParseDebuggerOutput(reply: string)
 	{
 		// New breakpoint response
@@ -218,7 +215,9 @@ export class MockRuntime extends EventEmitter {
 		if (newBreakpointReplyMatched) {
 			if (newBreakpointReplyMatched.groups) {
 				let g = newBreakpointReplyMatched.groups;
+				this._currentLine = g.LineNo + 1;
 				this.SetBreakPointId(parseFloat(g.BreakpointId), g.FileName, parseFloat(g.LineNo));
+				return;
 			}
 		}
 
@@ -231,8 +230,8 @@ export class MockRuntime extends EventEmitter {
 		if (breakpointHitReplyMatched) {
 			if (breakpointHitReplyMatched.groups) {
 				let g = breakpointHitReplyMatched.groups;
+				this.BreakPointHitInfo = g;
 				this.StopIDEForRaisedBreakPoint(parseFloat(g.BreakpointId), g.FileName, parseFloat(g.LineNo), g.ProcedureName);
-				//this.SetBreakPointId(parseFloat(g.BreakpointId), g.FileName, parseFloat(g.LineNo));
 			}
 		}
 	}
@@ -290,8 +289,8 @@ export class MockRuntime extends EventEmitter {
 	/**
 	 * Start executing the given program.
 	 */
-	public start(program: string, stopOnEntry: boolean) {
-
+	public start(program: string, stopOnEntry: boolean)
+	{
 		this.loadSource(program);
 		this._currentLine = -1;
 
@@ -310,14 +309,14 @@ export class MockRuntime extends EventEmitter {
 	 * Continue execution to the end/beginning.
 	 */
 	public continue(reverse = false) {
-		this.run(reverse, undefined);
+		//this.run(reverse, undefined);
 	}
 
 	/**
 	 * Step to the next/previous non empty line.
 	 */
 	public step(reverse = false, event = 'stopOnStep') {
-		this.run(reverse, event);
+		this.sendEvent(event);
 	}
 
 	/**
@@ -386,110 +385,8 @@ export class MockRuntime extends EventEmitter {
 	private loadSource(file: string) {
 		if (this._sourceFile !== file) {
 			this._sourceFile = file;
-			this._sourceLines = readFileSync(this._sourceFile).toString().split('\n');
+			//this._sourceLines = readFileSync(this._sourceFile).toString().split('\n');
 		}
-	}
-
-	/**
-	 * Run through the file.
-	 * If stepEvent is specified only run a single step and emit the stepEvent.
-	 */
-	private run(reverse = false, stepEvent?: string)
-	{
-		for (let ln = this._currentLine+1; ln < this._sourceLines.length; ln++) {
-			if (this.fireEventsForLine(ln, stepEvent)) {
-				this._currentLine = ln;
-				return true;
-			}
-		}
-		// no more lines: run to end
-		this.sendEvent('end');
-	}
-
-	/*private verifyBreakpoints(path: string) : void {
-		let bps = this._breakPoints.get(path);
-		if (bps) {
-			this.loadSource(path);
-			bps.forEach(bp => {
-				if (!bp.verified && bp.line < this._sourceLines.length) {
-					const srcLine = this._sourceLines[bp.line].trim();
-
-					// if a line is empty or starts with '+' we don't allow to set a breakpoint but move the breakpoint down
-					if (srcLine.length === 0 || srcLine.indexOf('+') === 0) {
-						bp.line++;
-					}
-					// if a line starts with '-' we don't allow to set a breakpoint but move the breakpoint up
-					if (srcLine.indexOf('-') === 0) {
-						bp.line--;
-					}
-					// don't set 'verified' to true if the line contains the word 'lazy'
-					// in this case the breakpoint will be verified 'lazy' after hitting it once.
-					if (srcLine.indexOf('lazy') < 0) {
-						bp.verified = true;
-						this.sendEvent('breakpointValidated', bp);
-					}
-				}
-			});
-		}
-	}*/
-
-	/**
-	 * Fire events if line has a breakpoint or the word 'exception' is found.
-	 * Returns true is execution needs to stop.
-	 */
-	private fireEventsForLine(ln: number, stepEvent?: string): boolean
-	{
-		/*const line = this._sourceLines[ln].trim();
-
-		// if 'log(...)' found in source -> send argument to debug console
-		const matches = /log\((.*)\)/.exec(line);
-		if (matches && matches.length === 2) {
-			this.sendEvent('output', matches[1], this._sourceFile, ln, matches.index)
-		}
-
-		// if a word in a line matches a data breakpoint, fire a 'dataBreakpoint' event
-		const words = line.split(" ");
-		for (let word of words) {
-			if (this._breakAddresses.has(word)) {
-				this.sendEvent('stopOnDataBreakpoint');
-				return true;
-			}
-		}
-
-		// if word 'exception' found in source -> throw exception
-		if (line.indexOf('exception') >= 0) {
-			this.sendEvent('stopOnException');
-			return true;
-		}
-
-		// is there a breakpoint?
-		const breakpoints = this._breakPoints.get(this._sourceFile);
-		if (breakpoints) {
-			const bps = breakpoints.filter(bp => bp.line === ln);
-			if (bps.length > 0) {
-
-				// send 'stopped' event
-				this.sendEvent('stopOnBreakpoint');
-
-				// the following shows the use of 'breakpoint' events to update properties of a breakpoint in the UI
-				// if breakpoint is not yet verified, verify it now and send a 'breakpoint' update event
-				if (!bps[0].verified) {
-					bps[0].verified = true;
-					this.sendEvent('breakpointValidated', bps[0]);
-				}
-				return true;
-			}
-		}
-
-		// non-empty line
-		if (stepEvent && line.length > 0) {
-			this.sendEvent(stepEvent);
-			return true;
-		}
-
-		// nothing interesting found -> continue
-		*/
-		return false;
 	}
 
 	private sendEvent(event: string, ... args: any[]) {

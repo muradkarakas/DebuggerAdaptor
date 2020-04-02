@@ -71,7 +71,7 @@
 				"configurationAttributes": {
 					"attach": {
 						"required": [
-							"program"
+
 						],
 						"properties": {
 							"program": {

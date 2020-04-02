@@ -200,7 +200,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		response.body.supportsCancelRequest = true;
 
 		// make VS Code send the breakpointLocations request
-		response.body.supportsBreakpointLocationsRequest = true;
+		response.body.supportsBreakpointLocationsRequest = false;
 
 		that.sendResponse(response);
 
@@ -257,7 +257,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		await this._configurationDone.wait(1000);
 
 		// start the program in the runtime
-		//this._runtime.start(args.program, !!args.stopOnEntry);
+		this._runtime.start(args.program, !!args.stopOnEntry);
 
 		this.sendResponse(response);
 	}
@@ -293,18 +293,25 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void {
+	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void
+	{
+		let frames: Array<StackFrame> = new Array<StackFrame>();
+		let pn: string = this._runtime.BreakPointHitInfo.ProcedureName;
+		pn = pn.replace('(', '').replace(')','');
+		let frame = new StackFrame(this._runtime.BreakPointHitInfo.BreakpointId, pn);
+		frame.line = this._runtime.BreakPointHitInfo.LineNo;
+		frame.column = 1;
 
-		const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
-		const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
-		const endFrame = startFrame + maxLevels;
+		let source = this.createSource(this._runtime.BreakPointHitInfo.FileName);
+		frame.source = source;
 
-		const stk = this._runtime.stack(startFrame, endFrame);
+		frames.push(frame);
 
 		response.body = {
-			stackFrames: stk.frames.map(f => new StackFrame(f.index, f.name, this.createSource(f.file), this.convertDebuggerLineToClient(f.line))),
-			totalFrames: stk.count
+			stackFrames: frames,
+			totalFrames: 1
 		};
+
 		this.sendResponse(response);
 	}
 
