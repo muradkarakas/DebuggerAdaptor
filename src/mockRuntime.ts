@@ -6,6 +6,7 @@
 import { EventEmitter } from 'events';
 import { ChildProcess } from 'child_process';
 import { InputBoxOptions } from 'vscode';
+import { basename } from 'path';
 
 const { spawn } = require('child_process');
 
@@ -89,7 +90,7 @@ export class MockRuntime extends EventEmitter {
 			this.sendEvent('end');
 		}
 
-		this._breakPoints.delete(path);;
+		this._breakPoints.delete(path);
 	}
 
 
@@ -124,8 +125,6 @@ export class MockRuntime extends EventEmitter {
 	 */
 	public setBreakPoint(path: string, line: number) : MockBreakpoint
 	{
-		path = path.toLowerCase();
-
 		if (this.SodiumDebuggerProcess) {
 			let that = this;
 			let p = SodiumUtils.WaitForStdout();
@@ -187,7 +186,7 @@ export class MockRuntime extends EventEmitter {
 		let options: InputBoxOptions = {
 			prompt: "Sodium Session Id: ",
 			placeHolder: "ex: 75254",
-			value: "98711"
+			value: "43663"
 		}
 		this._SodiumSessionId = await SodiumUtils.GetInput(options);
 	}
@@ -195,13 +194,13 @@ export class MockRuntime extends EventEmitter {
 	public StopIDEForRaisedBreakPoint(BreakpointId: number, FileName: string, LineNo: number, ProcedureName: string)
 	{
 		// is there a breakpoint?
-		const breakpoints = this._breakPoints.get(FileName.toLowerCase());
+		const breakpoints = this._breakPoints.get(basename(FileName));
 		if (breakpoints) {
 			const bps = breakpoints.filter(bp => bp.line === LineNo);
 			if (bps.length > 0) {
 
 				// send 'stopped' event
-				this.sendEvent('stopOnBreakpoint', bps[0]);
+				this.sendEvent('stopOnBreakpoint');
 			}
 		}
 	}
@@ -271,9 +270,6 @@ export class MockRuntime extends EventEmitter {
 						console.log(`Sodium Server is not running or not accessible !`);
 						break;
 					}
-					defaults: {
-						console.log(`child process exited with unknown code ${code}`);
-					}
 				}
 
 			});
@@ -324,26 +320,45 @@ export class MockRuntime extends EventEmitter {
 	 */
 	public stack(startFrame: number, endFrame: number): any
 	{
+		/*let frames: Array<StackFrame> = new Array<StackFrame>();
+		let pn: string = this._runtime.BreakPointHitInfo.ProcedureName;
+		pn = pn.replace('(', '').replace(')','').replace('.','_');
+
+		let frame = new StackFrame(args.startFrame, pn);
+		frame.line = this._runtime.BreakPointHitInfo.LineNo;
+		frame.column = 1argsç;
+
+		let source = this.createSource(this._runtime.BreakPointHitInfo.FileName);
+		frame.source = source;
+
+		frames.push(frame);
+
+		response.body = {
+			stackFrames: frames,
+			totalFrames: 1
+		};
+
+		this.sendResponse(response);*/
+		////////
 		const frames = new Array<any>();
-		let frameName = 'test_Frame';
 
 		frames.push({
 			index: 1,
-			name: frameName,
-			file: this._sourceFile,
-			line: this._currentLine
+			name: basename(this.BreakPointHitInfo.FileName),
+			file: basename(this.BreakPointHitInfo.FileName),
+			line: parseFloat(this.BreakPointHitInfo.LineNo),
+			column: 1
 		});
 
 		return {
 			frames: frames,
-			count: frameName.length
+			count: frames.length
 		};
 	}
 
 	public getBreakpoints(path: string, line: number): number[]
 	{
 		const bps: number[] = [];
-		path = path.toLowerCase();
 		let bpsf = this._breakPoints.get(path);
 		if (bpsf) {
 			for (let i = 0; i < bpsf.length; i++) {
@@ -356,7 +371,8 @@ export class MockRuntime extends EventEmitter {
 	/*
 	 * Clear breakpoint in file with given line.
 	 */
-	public clearBreakPoint(path: string, line: number) : MockBreakpoint | undefined {
+	public clearBreakPoint(path: string, line: number) : MockBreakpoint | undefined
+	{
 		let bps = this._breakPoints.get(path);
 		if (bps) {
 			const index = bps.findIndex(bp => bp.line === line);

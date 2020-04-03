@@ -10,6 +10,7 @@ import {
 	Thread, StackFrame, Scope, Source, Handles, Breakpoint
 } from 'vscode-debugadapter';
 
+import { readFileSync } from 'fs';
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { basename } from 'path';
 import { MockRuntime, MockBreakpoint } from './mockRuntime';
@@ -20,21 +21,6 @@ import { SodiumUtils } from './SodiumUtils';
 
 function timeout(ms: number) {
 	return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/**
- * This interface describes the mock-debug specific launch attributes
- * (which are not part of the Debug Adapter Protocol).
- * The schema for these attributes lives in the package.json of the mock-debug extension.
- * The interface should always match this schema.
- */
-interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
-	/** An absolute path to the "program" to debug. */
-	program: string;
-	/** Automatically stop target after launch. If not specified, target does not stop. */
-	stopOnEntry?: boolean;
-	/** enable logging the Debug Adapter Protocol */
-	trace?: boolean;
 }
 
 /**
@@ -65,13 +51,14 @@ export class MockDebugSession extends LoggingDebugSession {
 	private _configurationDone = new Subject();
 
 	private _cancelationTokens = new Map<number, boolean>();
+	private _sources = new Map<string, Source>();
 	private _isLongrunning = new Map<number, boolean>();
 
 	private _reportProgress = false;
 	private _progressId = 10000;
 	private _cancelledProgressId: string | undefined = undefined;
 	private _isProgressCancellable = true;
-
+	private _sourceId = 1;
 
 	/**
 	 * Creates a new debug adapter that is used for one debug session.
@@ -121,33 +108,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		this._runtime.on('end', () => {
 			this.sendEvent(new TerminatedEvent());
 		});
-	}
-
-	protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void
-	{
-		const path = <string>args.source.path;
-		const clientLines = args.lines || [];
-
-		if (args.source.path) {
-			this._runtime.clearBreakpoints(args.source.path);
-		}
-
-		let actualBreakpoints: Array<any> = new Array<any>();
-		for(let i = 0; i < clientLines.length; i++) {
-			let { verified, line, id } = this._runtime.setBreakPoint(path, this.convertClientLineToDebugger(clientLines[i]));
-			const bp = <DebugProtocol.Breakpoint> new Breakpoint(verified, this.convertDebuggerLineToClient(line));
-			bp.id= id;
-			actualBreakpoints.push(bp);
-		}
-
-		// send back the actual breakpoint positions
-		response.body = {
-			breakpoints: actualBreakpoints
-		};
-
-		SodiumUtils.release();
-
-		this.sendResponse(response);
 	}
 
 	protected disconnectRequest(response: DebugProtocol.DisconnectResponse, args: DebugProtocol.DisconnectArguments, request?: DebugProtocol.Request): void {
@@ -227,20 +187,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		}
 	}
 
-	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments) {
-
-		// make sure to 'Stop' the buffered logging if 'trace' is not set
-		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
-
-		// wait until configuration has finished (and configurationDoneRequest has been called)
-		await this._configurationDone.wait(1000);
-
-		// start the program in the runtime
-		//this._runtime.start(args.program, !!args.stopOnEntry);
-
-		this.sendResponse(response);
-	}
-
 	protected async attachRequest(response: DebugProtocol.AttachResponse, args: AttachRequestArguments, request?: DebugProtocol.Request): Promise<void> {
 		if (!this._runtime.isSodiumDebuggerProcessAvailable()) {
 			this.sendEvent(new TerminatedEvent());
@@ -295,23 +241,16 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void
 	{
-		let frames: Array<StackFrame> = new Array<StackFrame>();
-		let pn: string = this._runtime.BreakPointHitInfo.ProcedureName;
-		pn = pn.replace('(', '').replace(')','');
-		let frame = new StackFrame(this._runtime.BreakPointHitInfo.BreakpointId, pn);
-		frame.line = this._runtime.BreakPointHitInfo.LineNo;
-		frame.column = 1;
+		const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
+		const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
+		const endFrame = startFrame + maxLevels;
 
-		let source = this.createSource(this._runtime.BreakPointHitInfo.FileName);
-		frame.source = source;
-
-		frames.push(frame);
+		const stk = this._runtime.stack(startFrame, endFrame);
 
 		response.body = {
-			stackFrames: frames,
-			totalFrames: 1
+			stackFrames: stk.frames.map(f => new StackFrame(f.index, f.name, this.createSource(f.file), this.convertDebuggerLineToClient(f.line), f.column)),
+			totalFrames: stk.count
 		};
-
 		this.sendResponse(response);
 	}
 
@@ -583,7 +522,66 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	//---- helpers
 
-	private createSource(filePath: string): Source {
-		return new Source(basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'mock-adapter-data');
+	private createSource(filePath: string): Source
+	{
+		filePath = basename(filePath);
+		let source = this._sources.get(filePath);
+		if (source)
+			return source;
+
+		source = new Source(filePath, filePath, this._sourceId, undefined, 'mock-adapter-data');
+		this._sources.set(filePath, source);
+		this._sourceId++;
+		return source;
+	}
+
+	protected sourceRequest(response: DebugProtocol.SourceResponse, args: DebugProtocol.SourceArguments, request?: DebugProtocol.Request): void
+	{
+		let sourceLines: string = '';
+        try {
+			if (args.source) {
+				if (args.source.path) {
+					let wsFolder = 'C:\\projects\\Sodium\\Setup\\Sodium-Site\\';
+					sourceLines = readFileSync(wsFolder + args.source.path).toString();//.split('\n');
+				}
+			}
+
+            response.body = {
+				content: sourceLines,
+				//mimeType: 'javascript'
+			}
+		}
+		catch (error) {
+            this.sendErrorResponse(response, error)
+            return
+        }
+        this.sendResponse(response)
+	}
+
+	protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void
+	{
+		const clientLines = args.lines || [];
+		let actualBreakpoints: Array<any> = new Array<any>();
+
+		if (args.source.path) {
+			const path = basename(args.source.path);
+			this._runtime.clearBreakpoints(args.source.path);
+			for(let i = 0; i < clientLines.length; i++) {
+				let { verified, line, id } = this._runtime.setBreakPoint(path, this.convertClientLineToDebugger(clientLines[i]));
+				const bp = <DebugProtocol.Breakpoint> new Breakpoint(verified, this.convertDebuggerLineToClient(line));
+				bp.id= id;
+				bp.source = this.createSource(args.source.path);
+				actualBreakpoints.push(bp);
+			}
+		}
+
+		// send back the actual breakpoint positions
+		response.body = {
+			breakpoints: actualBreakpoints
+		};
+
+		SodiumUtils.release();
+
+		this.sendResponse(response);
 	}
 }
