@@ -18,6 +18,13 @@ export interface MockBreakpoint {
 	verified: boolean;
 }
 
+export class SodiumBreakPointInfo {
+	id: number;
+	line: number;
+	file: string;
+	procedure: string;
+}
+
 /**
  * A Mock runtime with minimal debugger functionality.
  */
@@ -35,13 +42,10 @@ export class MockRuntime extends EventEmitter {
 		this._sourceFile = value;
 	}
 
-	public BreakPointHitInfo: any;
+	public BreakPointHitInfo: SodiumBreakPointInfo = new SodiumBreakPointInfo();
 
 	// the contents (= lines) of the one and only file
 	//rivate _sourceLines: string[];
-
-	// This is the next line that will be 'executed'
-	private _currentLine = 0;
 
 	// maps from sourceFile to array of Mock breakpoints
 	private _breakPoints = new Map<string, MockBreakpoint[]>();
@@ -55,6 +59,26 @@ export class MockRuntime extends EventEmitter {
 	constructor() {
 		super();
 		this.startSodiumDebuggerProcess();
+	}
+
+	/**
+	 * Step to the next line.
+	 */
+	public step(reverse = false, event = 'stopOnStep') {
+		if (this.SodiumDebuggerProcess) {
+			let that = this;
+			let p = SodiumUtils.WaitForStdout();
+			p.then(function () {
+				if (that.SodiumDebuggerProcess != null) {
+					that.SodiumDebuggerProcess.stdin.cork();
+					that.SodiumDebuggerProcess.stdin.write("next;\r\n");
+					that.SodiumDebuggerProcess.stdin.uncork();
+				}
+			});
+		} else {
+			this.sendEvent('end');
+		}
+		this.sendEvent(event);
 	}
 
 	public SetBreakPointId(id: number, file: string, line: number)
@@ -186,35 +210,22 @@ export class MockRuntime extends EventEmitter {
 		let options: InputBoxOptions = {
 			prompt: "Sodium Session Id: ",
 			placeHolder: "ex: 75254",
-			value: "43663"
+			value: "68345"
 		}
 		this._SodiumSessionId = await SodiumUtils.GetInput(options);
 	}
 
-	public StopIDEForRaisedBreakPoint(BreakpointId: number, FileName: string, LineNo: number, ProcedureName: string)
-	{
-		// is there a breakpoint?
-		const breakpoints = this._breakPoints.get(basename(FileName));
-		if (breakpoints) {
-			const bps = breakpoints.filter(bp => bp.line === LineNo);
-			if (bps.length > 0) {
-
-				// send 'stopped' event
-				this.sendEvent('stopOnBreakpoint');
-			}
-		}
-	}
-
-
-
 	public ParseDebuggerOutput(reply: string)
 	{
-		// New breakpoint response
+		// break command response
+		/*
+		 *	Breakpoint 2 at 0x0000:  file welcome.sqlx, line 6.
+		 */
 		let newBreakpointReplyMatched: any = reply.match(/(?<BreakpointId>\d{1,3}) at 0x0000:  file (?<FileName>[\.:\-\w\\]+), line (?<LineNo>\d+)/);
 		if (newBreakpointReplyMatched) {
 			if (newBreakpointReplyMatched.groups) {
 				let g = newBreakpointReplyMatched.groups;
-				this._currentLine = g.LineNo + 1;
+				//this._currentLine = g.LineNo + 1;
 				this.SetBreakPointId(parseFloat(g.BreakpointId), g.FileName, parseFloat(g.LineNo));
 				return;
 			}
@@ -224,13 +235,41 @@ export class MockRuntime extends EventEmitter {
 		/*
 		 *  Breakpoint 2, cb_oracle.logon2oracle() at C:\projects\Sodium\Setup\Sodium-Site\welcome.sqlx:6
 		 *  C:\projects\Sodium\Setup\Sodium-Site\welcome.sqlx:6:1:beg:0x0000
-		*/
+		 */
 		let breakpointHitReplyMatched: any = reply.match(/(?<BreakpointId>\d{1,3}), (?<ProcedureName>[\(\)\.:\-\w\\]+) at (?<FileName>[\.:\-\w\\]+):(?<LineNo>\d{1,3})/);
 		if (breakpointHitReplyMatched) {
 			if (breakpointHitReplyMatched.groups) {
 				let g = breakpointHitReplyMatched.groups;
-				this.BreakPointHitInfo = g;
-				this.StopIDEForRaisedBreakPoint(parseFloat(g.BreakpointId), g.FileName, parseFloat(g.LineNo), g.ProcedureName);
+				if (g.BreakpointId)
+					this.BreakPointHitInfo.id = parseFloat(g.BreakpointId);
+				if (g.ProcedureName)
+					this.BreakPointHitInfo.procedure = g.ProcedureName;
+				if (g.FileName)
+					this.BreakPointHitInfo.file = g.FileName;
+				if (g.LineNo)
+					this.BreakPointHitInfo.line = parseFloat(g.LineNo);
+
+				this.sendEvent('stopOnBreakpoint');
+				return;
+			}
+		} else {
+			// next response
+			/*
+			*  C:\projects\Sodium\Setup\Sodium-Site\welcome.sqlx:6:1:beg:0x0000
+			*/
+			breakpointHitReplyMatched = reply.match(/\32\32(?<Drive>.):(?<FileName>[\.\-\w\\]+):(?<LineNo>\d{1,3})/);
+			if (breakpointHitReplyMatched) {
+				if (breakpointHitReplyMatched.groups) {
+					let g = breakpointHitReplyMatched.groups;
+					if (g.FileName)
+						this.BreakPointHitInfo.file = g.Drive + ":" + g.FileName;
+					if (g.LineNo)
+						this.BreakPointHitInfo.line = parseFloat(g.LineNo);
+
+					//this.BreakPointHitInfo = g;
+					this.sendEvent('stopOnBreakpoint');
+					return;
+				}
 			}
 		}
 	}
@@ -288,7 +327,7 @@ export class MockRuntime extends EventEmitter {
 	public start(program: string, stopOnEntry: boolean)
 	{
 		this.loadSource(program);
-		this._currentLine = -1;
+		//this._currentLine = -1;
 
 		//this.verifyBreakpoints(this._sourceFile);
 
@@ -306,13 +345,6 @@ export class MockRuntime extends EventEmitter {
 	 */
 	public continue(reverse = false) {
 		//this.run(reverse, undefined);
-	}
-
-	/**
-	 * Step to the next/previous non empty line.
-	 */
-	public step(reverse = false, event = 'stopOnStep') {
-		this.sendEvent(event);
 	}
 
 	/**
@@ -344,9 +376,9 @@ export class MockRuntime extends EventEmitter {
 
 		frames.push({
 			index: 1,
-			name: basename(this.BreakPointHitInfo.FileName),
-			file: basename(this.BreakPointHitInfo.FileName),
-			line: parseFloat(this.BreakPointHitInfo.LineNo),
+			name: basename(this.BreakPointHitInfo.file),
+			file: basename(this.BreakPointHitInfo.file),
+			line: this.BreakPointHitInfo.line,
 			column: 1
 		});
 
