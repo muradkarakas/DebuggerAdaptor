@@ -7,7 +7,7 @@ import {
 	LoggingDebugSession,
 	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
 	ProgressStartEvent, ProgressUpdateEvent, ProgressEndEvent,
-	Thread, StackFrame, Scope, Source, Handles, Breakpoint
+	Thread, StackFrame, Scope, Source, Handles, Breakpoint, ContinuedEvent
 } from 'vscode-debugadapter';
 
 import { readFileSync } from 'fs';
@@ -74,6 +74,9 @@ export class MockDebugSession extends LoggingDebugSession {
 		this._runtime = new MockRuntime();
 
 		// setup event handlers
+		this._runtime.on("Continuing.", () => {
+			this.sendEvent(new ContinuedEvent(MockDebugSession.THREAD_ID));
+		});
 		this._runtime.on('stopOnEntry', () => {
 			this.sendEvent(new StoppedEvent('entry', MockDebugSession.THREAD_ID));
 		});
@@ -108,6 +111,21 @@ export class MockDebugSession extends LoggingDebugSession {
 		this._runtime.on('end', () => {
 			this.sendEvent(new TerminatedEvent());
 		});
+	}
+
+	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void
+	{
+		const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
+		const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
+		const endFrame = startFrame + maxLevels;
+
+		const stk = this._runtime.stack(startFrame, endFrame);
+
+		response.body = {
+			stackFrames: stk.frames.map(f => new StackFrame(f.index, f.name, this.createSource(f.file), this.convertDebuggerLineToClient(f.line), f.column)),
+			totalFrames: stk.count
+		};
+		this.sendResponse(response);
 	}
 
 	protected disconnectRequest(response: DebugProtocol.DisconnectResponse, args: DebugProtocol.DisconnectArguments, request?: DebugProtocol.Request): void {
@@ -235,21 +253,6 @@ export class MockDebugSession extends LoggingDebugSession {
 			threads: [
 				new Thread(MockDebugSession.THREAD_ID, "thread 1")
 			]
-		};
-		this.sendResponse(response);
-	}
-
-	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void
-	{
-		const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
-		const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
-		const endFrame = startFrame + maxLevels;
-
-		const stk = this._runtime.stack(startFrame, endFrame);
-
-		response.body = {
-			stackFrames: stk.frames.map(f => new StackFrame(f.index, f.name, this.createSource(f.file), this.convertDebuggerLineToClient(f.line), f.column)),
-			totalFrames: stk.count
 		};
 		this.sendResponse(response);
 	}

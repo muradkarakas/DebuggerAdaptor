@@ -210,13 +210,22 @@ export class MockRuntime extends EventEmitter {
 		let options: InputBoxOptions = {
 			prompt: "Sodium Session Id: ",
 			placeHolder: "ex: 75254",
-			value: "68345"
+			value: "97129"
 		}
 		this._SodiumSessionId = await SodiumUtils.GetInput(options);
 	}
 
 	public ParseDebuggerOutput(reply: string)
 	{
+		// break command response
+		/*
+		 *	Breakpoint 2 at 0x0000:  file welcome.sqlx, line 6.
+		 */
+		if (reply.startsWith("Continuing.")) {
+			this.sendEvent('Continuing.');
+			return;
+		}
+
 		// break command response
 		/*
 		 *	Breakpoint 2 at 0x0000:  file welcome.sqlx, line 6.
@@ -344,7 +353,19 @@ export class MockRuntime extends EventEmitter {
 	 * Continue execution to the end/beginning.
 	 */
 	public continue(reverse = false) {
-		//this.run(reverse, undefined);
+		/*if (this.SodiumDebuggerProcess){
+			let that = this;
+			let p = SodiumUtils.WaitForStdout();
+			p.then(function () {
+				if (that.SodiumDebuggerProcess != null) {
+					that.SodiumDebuggerProcess.stdin.cork();
+					that.SodiumDebuggerProcess.stdin.write("continue;\r\n");
+					that.SodiumDebuggerProcess.stdin.uncork();
+				}
+			});
+		} else {
+			this.sendEvent('end');
+		}*/
 	}
 
 	/**
@@ -352,26 +373,6 @@ export class MockRuntime extends EventEmitter {
 	 */
 	public stack(startFrame: number, endFrame: number): any
 	{
-		/*let frames: Array<StackFrame> = new Array<StackFrame>();
-		let pn: string = this._runtime.BreakPointHitInfo.ProcedureName;
-		pn = pn.replace('(', '').replace(')','').replace('.','_');
-
-		let frame = new StackFrame(args.startFrame, pn);
-		frame.line = this._runtime.BreakPointHitInfo.LineNo;
-		frame.column = 1argsç;
-
-		let source = this.createSource(this._runtime.BreakPointHitInfo.FileName);
-		frame.source = source;
-
-		frames.push(frame);
-
-		response.body = {
-			stackFrames: frames,
-			totalFrames: 1
-		};
-
-		this.sendResponse(response);*/
-		////////
 		const frames = new Array<any>();
 
 		frames.push({
