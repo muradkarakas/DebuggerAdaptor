@@ -162,16 +162,16 @@ export class MockDebugSession extends LoggingDebugSession {
 		response.body.supportsConfigurationDoneRequest = true;
 
 		// make VS Code to use 'evaluate' when hovering over source
-		response.body.supportsEvaluateForHovers = true;
+		response.body.supportsEvaluateForHovers = false;
 
 		// make VS Code to show a 'step back' button
-		response.body.supportsStepBack = true;
+		response.body.supportsStepBack = false;
 
 		// make VS Code to support data breakpoints
-		response.body.supportsDataBreakpoints = true;
+		response.body.supportsDataBreakpoints = false;
 
 		// make VS Code to support completion in REPL
-		response.body.supportsCompletionsRequest = true;
+		response.body.supportsCompletionsRequest = false;
 		response.body.completionTriggerCharacters = [ ".", "[" ];
 
 		// make VS Code to send cancelRequests
@@ -355,13 +355,20 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
  	}
 
-	protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void {
-		this._runtime.step();
+	protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void
+	{
+		this._runtime.next('stopOnStep');
 		this.sendResponse(response);
 	}
 
-	protected stepBackRequest(response: DebugProtocol.StepBackResponse, args: DebugProtocol.StepBackArguments): void {
-		this._runtime.step(true);
+	protected stepInRequest(response: DebugProtocol.StepInResponse, args: DebugProtocol.StepInArguments, request?: DebugProtocol.Request): void
+	{
+		this._runtime.stepIn();
+		this.sendResponse(response);
+	}
+
+	protected stepOutRequest(response: DebugProtocol.StepOutResponse, args: DebugProtocol.StepOutArguments, request?: DebugProtocol.Request): void
+	{
 		this.sendResponse(response);
 	}
 
@@ -527,12 +534,11 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	private createSource(filePath: string): Source
 	{
-		filePath = basename(filePath);
 		let source = this._sources.get(filePath);
 		if (source)
 			return source;
 
-		source = new Source(filePath, filePath, this._sourceId, undefined, 'mock-adapter-data');
+		source = new Source(basename(filePath), filePath, this._sourceId, undefined, 'mock-adapter-data');
 		this._sources.set(filePath, source);
 		this._sourceId++;
 		return source;
@@ -544,8 +550,7 @@ export class MockDebugSession extends LoggingDebugSession {
         try {
 			if (args.source) {
 				if (args.source.path) {
-					let wsFolder = 'C:\\projects\\Sodium\\Setup\\Sodium-Site\\';
-					sourceLines = readFileSync(wsFolder + args.source.path).toString();//.split('\n');
+					sourceLines = readFileSync(args.source.path).toString();//.split('\n');
 				}
 			}
 
@@ -567,7 +572,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		let actualBreakpoints: Array<any> = new Array<any>();
 
 		if (args.source.path) {
-			const path = basename(args.source.path);
+			const path = args.source.path;
 			this._runtime.clearBreakpoints(args.source.path);
 			for(let i = 0; i < clientLines.length; i++) {
 				let { verified, line, id } = this._runtime.setBreakPoint(path, this.convertClientLineToDebugger(clientLines[i]));

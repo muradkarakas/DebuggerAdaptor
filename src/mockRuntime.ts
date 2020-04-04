@@ -6,7 +6,7 @@
 import { EventEmitter } from 'events';
 import { ChildProcess } from 'child_process';
 import { InputBoxOptions } from 'vscode';
-import { basename } from 'path';
+//import { basename } from 'path';
 
 const { spawn } = require('child_process');
 
@@ -62,9 +62,9 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	/**
-	 * Step to the next line.
+	 * 	 next
 	 */
-	public step(reverse = false, event = 'stopOnStep') {
+	public next(event: string) {
 		if (this.SodiumDebuggerProcess) {
 			let that = this;
 			let p = SodiumUtils.WaitForStdout();
@@ -79,6 +79,26 @@ export class MockRuntime extends EventEmitter {
 			this.sendEvent('end');
 		}
 		this.sendEvent(event);
+	}
+
+	/**
+	 * 	 step-in
+	 */
+	public stepIn() {
+		if (this.SodiumDebuggerProcess) {
+			let that = this;
+			let p = SodiumUtils.WaitForStdout();
+			p.then(function () {
+				if (that.SodiumDebuggerProcess != null) {
+					that.SodiumDebuggerProcess.stdin.cork();
+					that.SodiumDebuggerProcess.stdin.write("step;\r\n");
+					that.SodiumDebuggerProcess.stdin.uncork();
+				}
+			});
+		} else {
+			this.sendEvent('end');
+		}
+		this.sendEvent('stopOnStep');
 	}
 
 	public SetBreakPointId(id: number, file: string, line: number)
@@ -210,7 +230,7 @@ export class MockRuntime extends EventEmitter {
 		let options: InputBoxOptions = {
 			prompt: "Sodium Session Id: ",
 			placeHolder: "ex: 75254",
-			value: "97129"
+			value: "99272"
 		}
 		this._SodiumSessionId = await SodiumUtils.GetInput(options);
 	}
@@ -221,10 +241,10 @@ export class MockRuntime extends EventEmitter {
 		/*
 		 *	Breakpoint 2 at 0x0000:  file welcome.sqlx, line 6.
 		 */
-		if (reply.startsWith("Continuing.")) {
+		/*if (reply.startsWith("Continuing.")) {
 			this.sendEvent('Continuing.');
 			return;
-		}
+		}*/
 
 		// break command response
 		/*
@@ -342,7 +362,7 @@ export class MockRuntime extends EventEmitter {
 
 		if (stopOnEntry) {
 			// we step once
-			this.step(false, 'stopOnEntry');
+			this.next('stopOnEntry');
 		} else {
 			// we just start to run until we hit a breakpoint or an exception
 			this.continue();
@@ -352,8 +372,9 @@ export class MockRuntime extends EventEmitter {
 	/**
 	 * Continue execution to the end/beginning.
 	 */
-	public continue(reverse = false) {
-		/*if (this.SodiumDebuggerProcess){
+	public continue(reverse = false)
+	{
+		if (this.SodiumDebuggerProcess){
 			let that = this;
 			let p = SodiumUtils.WaitForStdout();
 			p.then(function () {
@@ -365,7 +386,7 @@ export class MockRuntime extends EventEmitter {
 			});
 		} else {
 			this.sendEvent('end');
-		}*/
+		}
 	}
 
 	/**
@@ -377,8 +398,8 @@ export class MockRuntime extends EventEmitter {
 
 		frames.push({
 			index: 1,
-			name: basename(this.BreakPointHitInfo.file),
-			file: basename(this.BreakPointHitInfo.file),
+			name: this.BreakPointHitInfo.procedure,
+			file: this.BreakPointHitInfo.file.replace("C:", "c:"),
 			line: this.BreakPointHitInfo.line,
 			column: 1
 		});
