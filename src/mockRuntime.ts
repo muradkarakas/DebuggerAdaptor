@@ -82,7 +82,6 @@ export class MockRuntime extends EventEmitter {
 			} else {
 				that.sendEvent('end');
 			}
-
 			MockRuntime.variableResolve = resolve;
 		});
 	}
@@ -294,7 +293,6 @@ export class MockRuntime extends EventEmitter {
 			if (json) {
 				MockRuntime.variablesJsonObject = json;
 				if (MockRuntime.variableResolve) {
-					console.log('object set');
 					MockRuntime.variableResolve();
 					MockRuntime.variableResolve = undefined;
 				}

@@ -14,6 +14,7 @@ import { readFileSync } from 'fs';
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { basename, dirname } from 'path';
 import { MockRuntime, MockBreakpoint } from './mockRuntime';
+import { Variable } from 'vscode-debugadapter';
 
 const { Subject } = require('await-notify');
 
@@ -274,20 +275,18 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	protected async variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments, request?: DebugProtocol.Request)
 	{
-		const variables: DebugProtocol.Variable[] = [];
+		const variables: Variable[] = [];
 
 		//this.sendEvent(event);
 		(async () => {
-			await this._runtime.variablesRequest().then(() => {})
+			await this._runtime.variablesRequest();//.then(() => {})
 			var vars = MockRuntime.variablesJsonObject;
 			if (vars) {
 				for(let i = 0; i < vars.length; i++) {
-					variables.push({
-						name: vars[i].name,
-						type: vars[i].vartype,
-						value: vars[i].value,
-						variablesReference: i
-					});
+					let v = new Variable(vars[i].name, vars[i].value);
+					// @ts-ignore
+					v.type = vars[i].vartype;
+					variables.push(v);
 				}
 			}
 			response.body = {
