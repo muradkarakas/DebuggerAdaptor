@@ -272,11 +272,18 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected async variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments, request?: DebugProtocol.Request) {
-
+	protected async variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments, request?: DebugProtocol.Request)
+	{
 		const variables: DebugProtocol.Variable[] = [];
 
-		if (this._isLongrunning.get(args.variablesReference)) {
+		variables.push({
+			name: `deneme`,
+			type: "integer",
+			value: `alican`,
+			variablesReference: 0
+		});
+
+		/*if (this._isLongrunning.get(args.variablesReference)) {
 			// long running
 
 			if (request) {
@@ -341,7 +348,7 @@ export class MockDebugSession extends LoggingDebugSession {
 				});
 				this._isLongrunning.set(ref, true);
 			}
-		}
+		}*/
 
 		response.body = {
 			variables: variables
