@@ -6,7 +6,7 @@
 import { EventEmitter } from 'events';
 import { ChildProcess } from 'child_process';
 import { InputBoxOptions } from 'vscode';
-//import { basename } from 'path';
+import { basename } from 'path';
 
 const { spawn } = require('child_process');
 
@@ -79,6 +79,26 @@ export class MockRuntime extends EventEmitter {
 			this.sendEvent('end');
 		}
 		this.sendEvent(event);
+	}
+
+	/**
+	 * 	 step-out
+	 */
+	public stepOut() {
+		if (this.SodiumDebuggerProcess) {
+			let that = this;
+			let p = SodiumUtils.WaitForStdout();
+			p.then(function () {
+				if (that.SodiumDebuggerProcess != null) {
+					that.SodiumDebuggerProcess.stdin.cork();
+					that.SodiumDebuggerProcess.stdin.write("finish;\r\n");
+					that.SodiumDebuggerProcess.stdin.uncork();
+				}
+			});
+		} else {
+			this.sendEvent('end');
+		}
+		this.sendEvent('stopOnStep');
 	}
 
 	/**
@@ -230,7 +250,7 @@ export class MockRuntime extends EventEmitter {
 		let options: InputBoxOptions = {
 			prompt: "Sodium Session Id: ",
 			placeHolder: "ex: 75254",
-			value: "99272"
+			value: "62613"
 		}
 		this._SodiumSessionId = await SodiumUtils.GetInput(options);
 	}
@@ -399,7 +419,7 @@ export class MockRuntime extends EventEmitter {
 		frames.push({
 			index: 1,
 			name: this.BreakPointHitInfo.procedure,
-			file: this.BreakPointHitInfo.file.replace("C:", "c:"),
+			file: basename(this.BreakPointHitInfo.file),//.replace("C:", "c:"),
 			line: this.BreakPointHitInfo.line,
 			column: 1
 		});

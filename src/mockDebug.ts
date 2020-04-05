@@ -12,7 +12,7 @@ import {
 
 import { readFileSync } from 'fs';
 import { DebugProtocol } from 'vscode-debugprotocol';
-import { basename } from 'path';
+import { basename, dirname } from 'path';
 import { MockRuntime, MockBreakpoint } from './mockRuntime';
 
 const { Subject } = require('await-notify');
@@ -38,6 +38,10 @@ interface AttachRequestArguments extends DebugProtocol.AttachRequestArguments {
 	trace?: boolean;
 }
 
+export class SodiumSource extends Source {
+	public dir: string;
+}
+
 export class MockDebugSession extends LoggingDebugSession {
 
 	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
@@ -51,7 +55,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	private _configurationDone = new Subject();
 
 	private _cancelationTokens = new Map<number, boolean>();
-	private _sources = new Map<string, Source>();
+	private _sources = new Map<string, SodiumSource>();
 	private _isLongrunning = new Map<number, boolean>();
 
 	private _reportProgress = false;
@@ -369,6 +373,7 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	protected stepOutRequest(response: DebugProtocol.StepOutResponse, args: DebugProtocol.StepOutArguments, request?: DebugProtocol.Request): void
 	{
+		this._runtime.stepOut();
 		this.sendResponse(response);
 	}
 
@@ -532,16 +537,45 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	//---- helpers
 
-	private createSource(filePath: string): Source
+	private createSource(filePath: string): SodiumSource
 	{
-		let source = this._sources.get(filePath);
+		let source: SodiumSource | undefined = this._sources.get(filePath);
 		if (source)
 			return source;
 
-		source = new Source(basename(filePath), filePath, this._sourceId, undefined, 'mock-adapter-data');
+		source = this.findSourceByName(filePath);
+		if (source)
+			return source;
+
+		source = new SodiumSource(basename(filePath), filePath, this._sourceId, undefined, 'mock-adapter-data');
+		source.dir = dirname(filePath);
 		this._sources.set(filePath, source);
 		this._sourceId++;
 		return source;
+	}
+
+	protected findSourceByName(name: string): SodiumSource | undefined
+	{
+		let retval: SodiumSource | undefined = undefined;
+		for(var [, value] of this._sources) {
+			if (value.name == name) {
+				retval = value;
+				break;
+			}
+		}
+		return retval;
+	}
+
+	protected findSourceByRefId(refId: number): SodiumSource | undefined
+	{
+		let retval: SodiumSource | undefined = undefined;
+		for(var [, value] of this._sources) {
+			if (value.sourceReference == refId) {
+				retval = value;
+				break;
+			}
+		}
+		return retval;
 	}
 
 	protected sourceRequest(response: DebugProtocol.SourceResponse, args: DebugProtocol.SourceArguments, request?: DebugProtocol.Request): void
@@ -550,7 +584,14 @@ export class MockDebugSession extends LoggingDebugSession {
         try {
 			if (args.source) {
 				if (args.source.path) {
-					sourceLines = readFileSync(args.source.path).toString();//.split('\n');
+					let fPath: string | undefined = undefined;
+					let ss: SodiumSource = (args.source as SodiumSource);
+					if (ss.dir)
+						fPath = ss.dir + "\\" + ss.name;
+					else
+						fPath = args.source.path;
+
+					sourceLines = readFileSync(fPath).toString();//.split('\n');
 				}
 			}
 
