@@ -56,7 +56,7 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	private _cancelationTokens = new Map<number, boolean>();
 	private _sources = new Map<string, SodiumSource>();
-	private _isLongrunning = new Map<number, boolean>();
+	//private _isLongrunning = new Map<number, boolean>();
 
 	private _reportProgress = false;
 	private _progressId = 10000;
@@ -276,84 +276,25 @@ export class MockDebugSession extends LoggingDebugSession {
 	{
 		const variables: DebugProtocol.Variable[] = [];
 
-		variables.push({
-			name: `deneme`,
-			type: "integer",
-			value: `alican`,
-			variablesReference: 0
-		});
-
-		/*if (this._isLongrunning.get(args.variablesReference)) {
-			// long running
-
-			if (request) {
-				this._cancelationTokens.set(request.seq, false);
-			}
-
-			for (let i = 0; i < 100; i++) {
-				await timeout(1000);
-				variables.push({
-					name: `i_${i}`,
-					type: "integer",
-					value: `${i}`,
-					variablesReference: 0
-				});
-				if (request && this._cancelationTokens.get(request.seq)) {
-					break;
+		//this.sendEvent(event);
+		(async () => {
+			await this._runtime.variablesRequest().then(() => {})
+			var vars = MockRuntime.variablesJsonObject;
+			if (vars) {
+				for(let i = 0; i < vars.length; i++) {
+					variables.push({
+						name: vars[i].name,
+						type: vars[i].vartype,
+						value: vars[i].value,
+						variablesReference: i
+					});
 				}
 			}
-
-			if (request) {
-				this._cancelationTokens.delete(request.seq);
-			}
-
-		} else {
-
-			const id = this._variableHandles.get(args.variablesReference);
-
-			if (id) {
-				variables.push({
-					name: id + "_i",
-					type: "integer",
-					value: "123",
-					variablesReference: 0
-				});
-				variables.push({
-					name: id + "_f",
-					type: "float",
-					value: "3.14",
-					variablesReference: 0
-				});
-				variables.push({
-					name: id + "_s",
-					type: "string",
-					value: "hello world",
-					variablesReference: 0
-				});
-				variables.push({
-					name: id + "_o",
-					type: "object",
-					value: "Object",
-					variablesReference: this._variableHandles.create(id + "_o")
-				});
-
-				// cancelation support for long running requests
-				const nm = id + "_long_running";
-				const ref = this._variableHandles.create(id + "_lr");
-				variables.push({
-					name: nm,
-					type: "object",
-					value: "Object",
-					variablesReference: ref
-				});
-				this._isLongrunning.set(ref, true);
-			}
-		}*/
-
-		response.body = {
-			variables: variables
-		};
-		this.sendResponse(response);
+			response.body = {
+				variables: variables
+			};
+			this.sendResponse(response);
+		})();
 	}
 
 	protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {

@@ -11,6 +11,7 @@ import { basename } from 'path';
 const { spawn } = require('child_process');
 
 import { SodiumUtils } from './SodiumUtils';
+import { Variable } from 'vscode-debugadapter';
 
 export interface MockBreakpoint {
 	id: number;
@@ -56,9 +57,34 @@ export class MockRuntime extends EventEmitter {
 
 	private _breakAddresses = new Set<string>();
 
+	public static variableResolve: Function | undefined = undefined;
+
+	public static variablesJsonObject: any;
+
 	constructor() {
 		super();
 		this.startSodiumDebuggerProcess();
+	}
+
+	public variablesRequest() : Promise<any>
+	{
+		let that = this;
+		return new Promise(function(resolve, reject) {
+			if (that.SodiumDebuggerProcess) {
+				let p = SodiumUtils.WaitForStdout();
+				p.then(function () {
+					if (that.SodiumDebuggerProcess != null) {
+						that.SodiumDebuggerProcess.stdin.cork();
+						that.SodiumDebuggerProcess.stdin.write("info locals;\r\n");
+						that.SodiumDebuggerProcess.stdin.uncork();
+					}
+				});
+			} else {
+				that.sendEvent('end');
+			}
+
+			MockRuntime.variableResolve = resolve;
+		});
 	}
 
 	/**
@@ -257,14 +283,23 @@ export class MockRuntime extends EventEmitter {
 
 	public ParseDebuggerOutput(reply: string)
 	{
-		// break command response
-		/*
-		 *	Breakpoint 2 at 0x0000:  file welcome.sqlx, line 6.
-		 */
-		/*if (reply.startsWith("Continuing.")) {
-			this.sendEvent('Continuing.');
+		let treadIdReplyMatched: any = reply.replace("\r\n", "").match(/\[New Thread (?<BreakpointId>\d+)\]/);
+		if (treadIdReplyMatched) {
 			return;
-		}*/
+		}
+
+		let jsonArrayReplyMatched: any = reply.replace("\r\n", "").match(/\[[a-zA-Z0-9\"., \:\{\}]*\]/);
+		if (jsonArrayReplyMatched) {
+			let json = JSON.parse(reply.replace("\r\n", ""));
+			if (json) {
+				MockRuntime.variablesJsonObject = json;
+				if (MockRuntime.variableResolve) {
+					console.log('object set');
+					MockRuntime.variableResolve();
+					MockRuntime.variableResolve = undefined;
+				}
+			}
+		}
 
 		// break command response
 		/*
