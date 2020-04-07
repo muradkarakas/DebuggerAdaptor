@@ -6,7 +6,7 @@ import {
 	Logger, logger,
 	LoggingDebugSession,
 	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
-	ProgressStartEvent, ProgressUpdateEvent, ProgressEndEvent,
+	//ProgressStartEvent, ProgressUpdateEvent, ProgressEndEvent,
 	Thread, StackFrame, Scope, Source, Handles, Breakpoint, ContinuedEvent
 } from 'vscode-debugadapter';
 
@@ -20,9 +20,6 @@ const { Subject } = require('await-notify');
 
 import { SodiumUtils } from './SodiumUtils';
 
-function timeout(ms: number) {
-	return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 /**
  * This interface describes the mock-debug specific launch attributes
@@ -55,14 +52,8 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	private _configurationDone = new Subject();
 
-	private _cancelationTokens = new Map<number, boolean>();
 	private _sources = new Map<string, SodiumSource>();
-	//private _isLongrunning = new Map<number, boolean>();
 
-	private _reportProgress = false;
-	private _progressId = 10000;
-	private _cancelledProgressId: string | undefined = undefined;
-	private _isProgressCancellable = true;
 	private _sourceId = 1;
 
 	/**
@@ -155,10 +146,6 @@ export class MockDebugSession extends LoggingDebugSession {
 	protected async initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): Promise<void> {
 		let that = this;
 		await this._runtime.GetSodiumSessionId();
-
-		if (args.supportsProgressReporting) {
-			that._reportProgress = true;
-		}
 
 		// build and return the capabilities of this debug adapter:
 		response.body = response.body || {};
@@ -324,81 +311,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments): void {
-
-		let reply: string | undefined = undefined;
-
-		if (args.context === 'repl') {
-			// 'evaluate' supports to create and delete breakpoints from the 'repl':
-			const matches = /new +([0-9]+)/.exec(args.expression);
-			if (matches && matches.length === 2) {
-				const mbp = this._runtime.setBreakPoint(this._runtime.sourceFile, this.convertClientLineToDebugger(parseInt(matches[1])));
-				const bp = <DebugProtocol.Breakpoint> new Breakpoint(mbp.verified, this.convertDebuggerLineToClient(mbp.line), undefined, this.createSource(this._runtime.sourceFile));
-				bp.id= mbp.id;
-				this.sendEvent(new BreakpointEvent('new', bp));
-				reply = `breakpoint created`;
-			} else {
-				const matches = /del +([0-9]+)/.exec(args.expression);
-				if (matches && matches.length === 2) {
-					const mbp = this._runtime.clearBreakPoint(this._runtime.sourceFile, this.convertClientLineToDebugger(parseInt(matches[1])));
-					if (mbp) {
-						const bp = <DebugProtocol.Breakpoint> new Breakpoint(false);
-						bp.id= mbp.id;
-						this.sendEvent(new BreakpointEvent('removed', bp));
-						reply = `breakpoint deleted`;
-					}
-				} else {
-					const matches = /progress/.exec(args.expression);
-					if (matches && matches.length === 1) {
-						if (this._reportProgress) {
-							reply = `progress started`;
-							this.progressSequence();
-						} else {
-							reply = `frontend doesn't support progress (capability 'supportsProgressReporting' not set)`;
-						}
-					}
-				}
-			}
-		}
-
-		response.body = {
-			result: reply ? reply : `evaluate(context: '${args.context}', '${args.expression}')`,
-			variablesReference: 0
-		};
-		this.sendResponse(response);
-	}
-
-	private async progressSequence() {
-
-		const ID = '' + this._progressId++;
-
-		await timeout(100);
-
-		const title = this._isProgressCancellable ? 'Cancellable operation' : 'Long running operation';
-		const startEvent: DebugProtocol.ProgressStartEvent = new ProgressStartEvent(ID, title);
-		startEvent.body.cancellable = this._isProgressCancellable;
-		this._isProgressCancellable = !this._isProgressCancellable;
-		this.sendEvent(startEvent);
-		this.sendEvent(new OutputEvent(`start progress: ${ID}\n`));
-
-		let endMessage = 'progress ended';
-
-		for (let i = 0; i < 100; i++) {
-			await timeout(500);
-			this.sendEvent(new ProgressUpdateEvent(ID, `progress: ${i}`));
-			if (this._cancelledProgressId === ID) {
-				endMessage = 'progress cancelled';
-				this._cancelledProgressId = undefined;
-				this.sendEvent(new OutputEvent(`cancel progress: ${ID}\n`));
-				break;
-			}
-		}
-		this.sendEvent(new ProgressEndEvent(ID, endMessage));
-		this.sendEvent(new OutputEvent(`end progress: ${ID}\n`));
-
-		this._cancelledProgressId = undefined;
-	}
-
 	protected dataBreakpointInfoRequest(response: DebugProtocol.DataBreakpointInfoResponse, args: DebugProtocol.DataBreakpointInfoArguments): void {
 
 		response.body = {
@@ -439,47 +351,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		}
 
 		this.sendResponse(response);
-	}
-
-	protected completionsRequest(response: DebugProtocol.CompletionsResponse, args: DebugProtocol.CompletionsArguments): void {
-
-		response.body = {
-			targets: [
-				{
-					label: "item 10",
-					sortText: "10"
-				},
-				{
-					label: "item 1",
-					sortText: "01"
-				},
-				{
-					label: "item 2",
-					sortText: "02"
-				},
-				{
-					label: "array[]",
-					selectionStart: 6,
-					sortText: "03"
-				},
-				{
-					label: "func(arg)",
-					selectionStart: 5,
-					selectionLength: 3,
-					sortText: "04"
-				}
-			]
-		};
-		this.sendResponse(response);
-	}
-
-	protected cancelRequest(response: DebugProtocol.CancelResponse, args: DebugProtocol.CancelArguments) {
-		if (args.requestId) {
-			this._cancelationTokens.set(args.requestId, true);
-		}
-		if (args.progressId) {
-			this._cancelledProgressId= args.progressId;
-		}
 	}
 
 	//---- helpers

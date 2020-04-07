@@ -275,7 +275,7 @@ export class MockRuntime extends EventEmitter {
 		let options: InputBoxOptions = {
 			prompt: "Sodium Session Id: ",
 			placeHolder: "ex: 75254",
-			value: "62613"
+			value: "98323"
 		}
 		this._SodiumSessionId = await SodiumUtils.GetInput(options);
 	}
