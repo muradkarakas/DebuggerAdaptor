@@ -96,21 +96,6 @@ export class MockRuntime extends EventEmitter {
 			}
 			MockRuntime.gResolve = resolve;
 		});
-
-		/*const frames = new Array<any>();
-
-		frames.push({
-			index: 1,
-			name: this.BreakPointHitInfo.procedure,
-			file: basename(this.BreakPointHitInfo.file),//.replace("C:", "c:"),
-			line: this.BreakPointHitInfo.line,
-			column: 1
-		});
-
-		return {
-			frames: frames,
-			count: frames.length
-		};*/
 	}
 
 

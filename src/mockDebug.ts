@@ -7,7 +7,7 @@ import {
 	LoggingDebugSession,
 	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
 	//ProgressStartEvent, ProgressUpdateEvent, ProgressEndEvent,
-	Thread, StackFrame, Scope, Source, Handles, Breakpoint, ContinuedEvent
+	Thread, Scope, Source, Handles, Breakpoint, ContinuedEvent
 } from 'vscode-debugadapter';
 
 import { readFileSync } from 'fs';
@@ -252,11 +252,15 @@ export class MockDebugSession extends LoggingDebugSession {
 			await this._runtime.variablesRequest();
 			var vars = MockRuntime.gJsonObject;
 			if (vars) {
-				for(let i = 0; i < vars.length; i++) {
-					let v = new Variable(vars[i].name, vars[i].value);
-					// @ts-ignore
-					v.type = vars[i].type;
-					variables.push(v);
+				if (args.variablesReference == 1000) {
+					if (vars.locals) {
+						for(let i = 0; i < vars.locals.length; i++) {
+							let v = new Variable(vars.locals[i].name, vars.locals[i].value);
+							// @ts-ignore
+							v.type = vars.locals[i].type;
+							variables.push(v);
+						}
+					}
 				}
 			}
 			response.body = {
@@ -276,18 +280,18 @@ export class MockDebugSession extends LoggingDebugSession {
 			await this._runtime.stackRequest(startFrame, endFrame);
 
 			var vars = MockRuntime.gJsonObject;
-			if (vars) {
-				if (vars.length > 0) {
-					if (vars[0].procedure) {
+			if (vars && vars.frames) {
+				if (vars.frames.length > 0) {
+					if (vars.frames[0].procedure) {
 						const frames = new Array<any>();
-						for (let i = startFrame; i < Math.min(endFrame, vars.length); i++) {
+						for (let i = startFrame; i < Math.min(endFrame, vars.frames.length); i++) {
 							frames.push({
-								id: parseFloat(vars[i].stackid),
+								id: parseFloat(vars.frames[i].stackid),
 								index: i,
-								name: vars[i].procedure + '()',
-								file: vars[i].file.replace("C:", "c:"),
-								line: parseFloat(vars[i].line),
-								source: this.createSource(vars[i].file),
+								name: vars.frames[i].procedure + '()',
+								file: vars.frames[i].file.replace("C:", "c:"),
+								line: parseFloat(vars.frames[i].line),
+								source: this.createSource(vars.frames[i].file),
 								column: 1
 							});
 						}
