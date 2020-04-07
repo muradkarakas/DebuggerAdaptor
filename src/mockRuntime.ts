@@ -6,12 +6,10 @@
 import { EventEmitter } from 'events';
 import { ChildProcess } from 'child_process';
 import { InputBoxOptions } from 'vscode';
-import { basename } from 'path';
 
 const { spawn } = require('child_process');
 
 import { SodiumUtils } from './SodiumUtils';
-import { Variable } from 'vscode-debugadapter';
 
 export interface MockBreakpoint {
 	id: number;
@@ -34,15 +32,6 @@ export class MockRuntime extends EventEmitter {
 	private _SodiumSessionId: string | undefined = undefined;
 	private SodiumDebuggerProcess: ChildProcess | null = null;
 
-	// the initial (and one and only) file we are 'debugging'
-	private _sourceFile: string;
-	public get sourceFile() {
-		return this._sourceFile;
-	}
-	public set sourceFile(value: string) {
-		this._sourceFile = value;
-	}
-
 	public BreakPointHitInfo: SodiumBreakPointInfo = new SodiumBreakPointInfo();
 
 	// the contents (= lines) of the one and only file
@@ -57,9 +46,9 @@ export class MockRuntime extends EventEmitter {
 
 	private _breakAddresses = new Set<string>();
 
-	public static variableResolve: Function | undefined = undefined;
+	public static gResolve: Function | undefined = undefined;
 
-	public static variablesJsonObject: any;
+	public static gJsonObject: any;
 
 	constructor() {
 		super();
@@ -82,9 +71,48 @@ export class MockRuntime extends EventEmitter {
 			} else {
 				that.sendEvent('end');
 			}
-			MockRuntime.variableResolve = resolve;
+			MockRuntime.gResolve = resolve;
 		});
 	}
+
+	/**
+	 * Returns a fake 'stacktrace' where every 'stackframe' is a word from the current line.
+	 */
+	public stackRequest(startFrame: number, endFrame: number): any
+	{
+		let that = this;
+		return new Promise(function(resolve, reject) {
+			if (that.SodiumDebuggerProcess) {
+				let p = SodiumUtils.WaitForStdout();
+				p.then(function () {
+					if (that.SodiumDebuggerProcess != null) {
+						that.SodiumDebuggerProcess.stdin.cork();
+						that.SodiumDebuggerProcess.stdin.write("info frame;\r\n");
+						that.SodiumDebuggerProcess.stdin.uncork();
+					}
+				});
+			} else {
+				that.sendEvent('end');
+			}
+			MockRuntime.gResolve = resolve;
+		});
+
+		/*const frames = new Array<any>();
+
+		frames.push({
+			index: 1,
+			name: this.BreakPointHitInfo.procedure,
+			file: basename(this.BreakPointHitInfo.file),//.replace("C:", "c:"),
+			line: this.BreakPointHitInfo.line,
+			column: 1
+		});
+
+		return {
+			frames: frames,
+			count: frames.length
+		};*/
+	}
+
 
 	/**
 	 * 	 next
@@ -275,7 +303,7 @@ export class MockRuntime extends EventEmitter {
 		let options: InputBoxOptions = {
 			prompt: "Sodium Session Id: ",
 			placeHolder: "ex: 75254",
-			value: "98323"
+			value: "16786"
 		}
 		this._SodiumSessionId = await SodiumUtils.GetInput(options);
 	}
@@ -287,14 +315,26 @@ export class MockRuntime extends EventEmitter {
 			return;
 		}
 
-		let jsonArrayReplyMatched: any = reply.replace("\r\n", "").match(/\[[a-zA-Z0-9\"., \:\{\}]*\]/);
-		if (jsonArrayReplyMatched) {
+		let jsonArrayReplyMatched1: any = reply.replace("\r\n", "").match(/\[[a-zA-Z0-9\"., \:\{\}]*\]/);
+		if (jsonArrayReplyMatched1) {
 			let json = JSON.parse(reply.replace("\r\n", ""));
 			if (json) {
-				MockRuntime.variablesJsonObject = json;
-				if (MockRuntime.variableResolve) {
-					MockRuntime.variableResolve();
-					MockRuntime.variableResolve = undefined;
+				MockRuntime.gJsonObject = json;
+				if (MockRuntime.gResolve) {
+					MockRuntime.gResolve();
+					MockRuntime.gResolve = undefined;
+				}
+			}
+		}
+
+		let jsonArrayReplyMatched = reply.replace("\r\n", "").split("$").join("\\").match(/\[[\{\}a-zA-Z0-9\: \"_,\.\-\\$]*\]/);
+		if (jsonArrayReplyMatched) {
+			let json = JSON.parse(reply.split("$").join("\\\\").replace("\r\n", ""));
+			if (json) {
+				MockRuntime.gJsonObject = json;
+				if (MockRuntime.gResolve) {
+					MockRuntime.gResolve();
+					MockRuntime.gResolve = undefined;
 				}
 			}
 		}
@@ -408,11 +448,6 @@ export class MockRuntime extends EventEmitter {
 	 */
 	public start(program: string, stopOnEntry: boolean)
 	{
-		this.loadSource(program);
-		//this._currentLine = -1;
-
-		//this.verifyBreakpoints(this._sourceFile);
-
 		if (stopOnEntry) {
 			// we step once
 			this.next('stopOnEntry');
@@ -440,27 +475,6 @@ export class MockRuntime extends EventEmitter {
 		} else {
 			this.sendEvent('end');
 		}
-	}
-
-	/**
-	 * Returns a fake 'stacktrace' where every 'stackframe' is a word from the current line.
-	 */
-	public stack(startFrame: number, endFrame: number): any
-	{
-		const frames = new Array<any>();
-
-		frames.push({
-			index: 1,
-			name: this.BreakPointHitInfo.procedure,
-			file: basename(this.BreakPointHitInfo.file),//.replace("C:", "c:"),
-			line: this.BreakPointHitInfo.line,
-			column: 1
-		});
-
-		return {
-			frames: frames,
-			count: frames.length
-		};
 	}
 
 	public getBreakpoints(path: string, line: number): number[]
@@ -502,14 +516,6 @@ export class MockRuntime extends EventEmitter {
 			return true;
 		}
 		return false;
-	}
-
-	// private methods
-	private loadSource(file: string) {
-		if (this._sourceFile !== file) {
-			this._sourceFile = file;
-			//this._sourceLines = readFileSync(this._sourceFile).toString().split('\n');
-		}
 	}
 
 	private sendEvent(event: string, ... args: any[]) {

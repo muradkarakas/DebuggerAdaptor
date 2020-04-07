@@ -48,7 +48,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	// Real debugger executable, SodiumDebugger.exe
 	private _runtime: MockRuntime;
 
-	private _variableHandles = new Handles<string>();
+	private _variableHandles = new Handles<string>(1000);
 
 	private _configurationDone = new Subject();
 
@@ -107,21 +107,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		this._runtime.on('end', () => {
 			this.sendEvent(new TerminatedEvent());
 		});
-	}
-
-	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void
-	{
-		const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
-		const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
-		const endFrame = startFrame + maxLevels;
-
-		const stk = this._runtime.stack(startFrame, endFrame);
-
-		response.body = {
-			stackFrames: stk.frames.map(f => new StackFrame(f.index, f.name, this.createSource(f.file), this.convertDebuggerLineToClient(f.line), f.column)),
-			totalFrames: stk.count
-		};
-		this.sendResponse(response);
 	}
 
 	protected disconnectRequest(response: DebugProtocol.DisconnectResponse, args: DebugProtocol.DisconnectArguments, request?: DebugProtocol.Request): void {
@@ -204,7 +189,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		}
 
 		this._runtime.sendAttachRequestToSodiumServer();
-		this._runtime.sourceFile = args.program;
 
 		// make sure to 'Stop' the buffered logging if 'trace' is not set
 		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
@@ -238,8 +222,8 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
-
+	protected threadsRequest(response: DebugProtocol.ThreadsResponse): void
+	{
 		// runtime supports no threads so just return a default thread.
 		response.body = {
 			threads: [
@@ -253,8 +237,9 @@ export class MockDebugSession extends LoggingDebugSession {
 	{
 		response.body = {
 			scopes: [
-				new Scope("Local", this._variableHandles.create("local"), false),
-				new Scope("Global", this._variableHandles.create("global"), true)
+				new Scope("Local", 1000, false),
+				new Scope("Parameters", 1001, false),
+				new Scope("Global", 1002, false)
 			]
 		};
 		this.sendResponse(response);
@@ -263,16 +248,14 @@ export class MockDebugSession extends LoggingDebugSession {
 	protected async variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments, request?: DebugProtocol.Request)
 	{
 		const variables: Variable[] = [];
-
-		//this.sendEvent(event);
 		(async () => {
-			await this._runtime.variablesRequest();//.then(() => {})
-			var vars = MockRuntime.variablesJsonObject;
+			await this._runtime.variablesRequest();
+			var vars = MockRuntime.gJsonObject;
 			if (vars) {
 				for(let i = 0; i < vars.length; i++) {
 					let v = new Variable(vars[i].name, vars[i].value);
 					// @ts-ignore
-					v.type = vars[i].vartype;
+					v.type = vars[i].type;
 					variables.push(v);
 				}
 			}
@@ -280,6 +263,42 @@ export class MockDebugSession extends LoggingDebugSession {
 				variables: variables
 			};
 			this.sendResponse(response);
+		})();
+	}
+
+	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void
+	{
+		(async () => {
+			const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
+			const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
+			const endFrame = startFrame + maxLevels;
+
+			await this._runtime.stackRequest(startFrame, endFrame);
+
+			var vars = MockRuntime.gJsonObject;
+			if (vars) {
+				if (vars.length > 0) {
+					if (vars[0].procedure) {
+						const frames = new Array<any>();
+						for (let i = startFrame; i < Math.min(endFrame, vars.length); i++) {
+							frames.push({
+								id: parseFloat(vars[i].stackid),
+								index: i,
+								name: vars[i].procedure + '()',
+								file: vars[i].file.replace("C:", "c:"),
+								line: parseFloat(vars[i].line),
+								source: this.createSource(vars[i].file),
+								column: 1
+							});
+						}
+						response.body = {
+							stackFrames: frames,
+							totalFrames: frames.length
+						}
+					}
+				}
+				this.sendResponse(response);
+			}
 		})();
 	}
 
@@ -311,8 +330,8 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected dataBreakpointInfoRequest(response: DebugProtocol.DataBreakpointInfoResponse, args: DebugProtocol.DataBreakpointInfoArguments): void {
-
+	protected dataBreakpointInfoRequest(response: DebugProtocol.DataBreakpointInfoResponse, args: DebugProtocol.DataBreakpointInfoArguments): void
+	{
 		response.body = {
             dataId: null,
             description: "cannot break on data access",
