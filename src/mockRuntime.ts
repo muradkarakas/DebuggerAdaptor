@@ -288,7 +288,7 @@ export class MockRuntime extends EventEmitter {
 		let options: InputBoxOptions = {
 			prompt: "Sodium Session Id: ",
 			placeHolder: "ex: 75254",
-			value: "16786"
+			value: "42678"
 		}
 		this._SodiumSessionId = await SodiumUtils.GetInput(options);
 	}
@@ -300,14 +300,15 @@ export class MockRuntime extends EventEmitter {
 			return;
 		}
 
-		let jsonArrayReplyMatched1: any = reply.replace("\r\n", "").match(/\[[a-zA-Z0-9\"., \:\{\}]*\]/);
+		let jsonArrayReplyMatched1: any = reply.replace("\r\n", "").split("$").join("\\").match(/\[[a-zA-Z0-9\"., \:\{\}]*\]/);
 		if (jsonArrayReplyMatched1) {
-			let json = JSON.parse(reply.replace("\r\n", ""));
+			let json = JSON.parse(reply.split("$").join("\\\\").replace("\r\n", ""));
 			if (json) {
 				MockRuntime.gJsonObject = json;
 				if (MockRuntime.gResolve) {
 					MockRuntime.gResolve();
 					MockRuntime.gResolve = undefined;
+					return;
 				}
 			}
 		}
@@ -320,6 +321,7 @@ export class MockRuntime extends EventEmitter {
 				if (MockRuntime.gResolve) {
 					MockRuntime.gResolve();
 					MockRuntime.gResolve = undefined;
+					return;
 				}
 			}
 		}
