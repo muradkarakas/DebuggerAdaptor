@@ -235,6 +235,8 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	protected scopesRequest(response: DebugProtocol.ScopesResponse, args: DebugProtocol.ScopesArguments): void
 	{
+		this._runtime.frame(args.frameId);
+
 		response.body = {
 			scopes: [
 				new Scope("Local", 1000, false),

@@ -55,10 +55,34 @@ export class MockRuntime extends EventEmitter {
 		this.startSodiumDebuggerProcess();
 	}
 
+	/**
+	 * 	Set frame number.
+	 */
+	public frame(frameId: number): any
+	{
+		let that = this;
+		return new Promise(function(resolve, reject) {
+			MockRuntime.gResolve = resolve;
+			if (that.SodiumDebuggerProcess) {
+				let p = SodiumUtils.WaitForStdout();
+				p.then(function () {
+					if (that.SodiumDebuggerProcess != null) {
+						that.SodiumDebuggerProcess.stdin.cork();
+						that.SodiumDebuggerProcess.stdin.write("frame " + frameId + ";\r\n");
+						that.SodiumDebuggerProcess.stdin.uncork();
+					}
+				});
+			} else {
+				that.sendEvent('end');
+			}
+		});
+	}
+
 	public variablesRequest() : Promise<any>
 	{
 		let that = this;
 		return new Promise(function(resolve, reject) {
+			MockRuntime.gResolve = resolve;
 			if (that.SodiumDebuggerProcess) {
 				let p = SodiumUtils.WaitForStdout();
 				p.then(function () {
@@ -71,7 +95,6 @@ export class MockRuntime extends EventEmitter {
 			} else {
 				that.sendEvent('end');
 			}
-			MockRuntime.gResolve = resolve;
 		});
 	}
 
@@ -82,6 +105,7 @@ export class MockRuntime extends EventEmitter {
 	{
 		let that = this;
 		return new Promise(function(resolve, reject) {
+			MockRuntime.gResolve = resolve;
 			if (that.SodiumDebuggerProcess) {
 				let p = SodiumUtils.WaitForStdout();
 				p.then(function () {
@@ -94,7 +118,6 @@ export class MockRuntime extends EventEmitter {
 			} else {
 				that.sendEvent('end');
 			}
-			MockRuntime.gResolve = resolve;
 		});
 	}
 
@@ -191,7 +214,6 @@ export class MockRuntime extends EventEmitter {
 		} else {
 			this.sendEvent('end');
 		}
-
 		this._breakPoints.delete(path);
 	}
 
@@ -214,7 +236,6 @@ export class MockRuntime extends EventEmitter {
 		} else {
 			this.sendEvent('end');
 		}
-
 		this._breakAddresses.clear();
 	}
 
@@ -288,7 +309,7 @@ export class MockRuntime extends EventEmitter {
 		let options: InputBoxOptions = {
 			prompt: "Sodium Session Id: ",
 			placeHolder: "ex: 75254",
-			value: "42678"
+			value: "64199"
 		}
 		this._SodiumSessionId = await SodiumUtils.GetInput(options);
 	}
@@ -300,16 +321,29 @@ export class MockRuntime extends EventEmitter {
 			return;
 		}
 
-		let jsonArrayReplyMatched1: any = reply.replace("\r\n", "").split("$").join("\\").match(/\[[a-zA-Z0-9\"., \:\{\}]*\]/);
-		if (jsonArrayReplyMatched1) {
+		let frameSetReplyMatched: any = reply.match(/\{ *"frameset" *: *"(?<Frame>\d+)" *\}/);
+		if (frameSetReplyMatched) {
 			let json = JSON.parse(reply.split("$").join("\\\\").replace("\r\n", ""));
 			if (json) {
 				MockRuntime.gJsonObject = json;
 				if (MockRuntime.gResolve) {
 					MockRuntime.gResolve();
 					MockRuntime.gResolve = undefined;
-					return;
 				}
+				return;
+			}
+		}
+
+		let jsonArrayReplyMatched2: any = reply.replace("\r\n", "").split("$").join("\\").match(/\[[a-zA-Z0-9\"., \:\{\}]*\]/);
+		if (jsonArrayReplyMatched2) {
+			let json = JSON.parse(reply.split("$").join("\\\\").replace("\r\n", ""));
+			if (json) {
+				MockRuntime.gJsonObject = json;
+				if (MockRuntime.gResolve) {
+					MockRuntime.gResolve();
+					MockRuntime.gResolve = undefined;
+				}
+				return;
 			}
 		}
 
@@ -321,8 +355,8 @@ export class MockRuntime extends EventEmitter {
 				if (MockRuntime.gResolve) {
 					MockRuntime.gResolve();
 					MockRuntime.gResolve = undefined;
-					return;
 				}
+				return;
 			}
 		}
 
@@ -381,6 +415,16 @@ export class MockRuntime extends EventEmitter {
 				}
 			}
 		}
+/*
+		let frameReplyMatched: any =  reply.match(/(?<FrameId>\d{1,2}) in (?<ProcedureName>[\(\)\.:\-\w\\ \(\)]+) at (?<FileName>[\.:\-\w\\]+):(?<LineNo>\d+)/);
+		if (frameReplyMatched) {
+			if (frameReplyMatched.groups) {
+				let g = frameReplyMatched.groups;
+				MockRuntime._frameId = g.groups.FrameId;
+				this.SetBreakPointId(parseFloat(g.BreakpointId), g.FileName, parseFloat(g.LineNo));
+				return;
+			}
+		}*/
 	}
 
 	public startSodiumDebuggerProcess() {
