@@ -14,6 +14,11 @@ export class SodiumUtils
 		return new Promise<any>(function(a) { a() });
 	}
 
+	public static SanitizePathForSodiumDebugger(path: string): string
+	{
+		return path.replace("C:", "c:").replace("D:", "d:").replace("E:", "d:");
+	}
+
 	public static async GetInput(options: InputBoxOptions): Promise<any> {
 		let retval: any = undefined;
 

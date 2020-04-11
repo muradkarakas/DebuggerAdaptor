@@ -291,7 +291,7 @@ export class MockDebugSession extends LoggingDebugSession {
 								id: parseFloat(vars.frames[i].stackid),
 								index: i,
 								name: vars.frames[i].procedure + '()',
-								file: vars.frames[i].file.replace("C:", "c:"),
+								file: SodiumUtils.SanitizePathForSodiumDebugger(vars.frames[i].file),
 								line: parseFloat(vars.frames[i].line),
 								source: this.createSource(vars.frames[i].file),
 								column: 1
@@ -382,6 +382,8 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	private createSource(filePath: string): SodiumSource
 	{
+		filePath = SodiumUtils.SanitizePathForSodiumDebugger(filePath);
+
 		let source: SodiumSource | undefined = this._sources.get(filePath);
 		if (source)
 			return source;
@@ -450,12 +452,15 @@ export class MockDebugSession extends LoggingDebugSession {
         this.sendResponse(response)
 	}
 
+
+
 	protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void
 	{
 		const clientLines = args.lines || [];
 		let actualBreakpoints: Array<any> = new Array<any>();
 
 		if (args.source.path) {
+			args.source.path = SodiumUtils.SanitizePathForSodiumDebugger(args.source.path);
 			const path = args.source.path;
 			this._runtime.clearBreakpoints(args.source.path);
 			for(let i = 0; i < clientLines.length; i++) {
