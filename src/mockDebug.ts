@@ -358,8 +358,8 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected setDataBreakpointsRequest(response: DebugProtocol.SetDataBreakpointsResponse, args: DebugProtocol.SetDataBreakpointsArguments): void {
-
+	protected setDataBreakpointsRequest(response: DebugProtocol.SetDataBreakpointsResponse, args: DebugProtocol.SetDataBreakpointsArguments): void
+	{
 		// clear all data breakpoints
 		this._runtime.clearAllDataBreakpoints();
 
@@ -460,14 +460,13 @@ export class MockDebugSession extends LoggingDebugSession {
 		let actualBreakpoints: Array<any> = new Array<any>();
 
 		if (args.source.path) {
-			args.source.path = SodiumUtils.SanitizePathForSodiumDebugger(args.source.path);
-			const path = args.source.path;
-			this._runtime.clearBreakpoints(args.source.path);
+			const path = SodiumUtils.SanitizePathForSodiumDebugger(args.source.path);
+			this._runtime.clearBreakpoints(path);
 			for(let i = 0; i < clientLines.length; i++) {
 				let { verified, line, id } = this._runtime.setBreakPoint(path, this.convertClientLineToDebugger(clientLines[i]));
 				const bp = <DebugProtocol.Breakpoint> new Breakpoint(verified, this.convertDebuggerLineToClient(line));
 				bp.id= id;
-				bp.source = this.createSource(args.source.path);
+				bp.source = this.createSource(path);
 				actualBreakpoints.push(bp);
 			}
 		}
@@ -477,7 +476,7 @@ export class MockDebugSession extends LoggingDebugSession {
 			breakpoints: actualBreakpoints
 		};
 
-		SodiumUtils.release();
+		//SodiumUtils.ReleaseStdout("...");
 
 		this.sendResponse(response);
 	}

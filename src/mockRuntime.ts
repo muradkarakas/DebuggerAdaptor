@@ -30,7 +30,7 @@ export class SodiumBreakPointInfo {
 export class MockRuntime extends EventEmitter {
 
 	private _SodiumSessionId: string | undefined = undefined;
-	private SodiumDebuggerProcess: ChildProcess | null = null;
+	public SodiumDebuggerProcess: ChildProcess | null = null;
 
 	public BreakPointHitInfo: SodiumBreakPointInfo = new SodiumBreakPointInfo();
 
@@ -64,13 +64,10 @@ export class MockRuntime extends EventEmitter {
 		return new Promise(function(resolve, reject) {
 			MockRuntime.gResolve = resolve;
 			if (that.SodiumDebuggerProcess) {
+				let cmd = "frame " + frameId + ";\r\n";
 				let p = SodiumUtils.WaitForStdout();
 				p.then(function () {
-					if (that.SodiumDebuggerProcess != null) {
-						that.SodiumDebuggerProcess.stdin.cork();
-						that.SodiumDebuggerProcess.stdin.write("frame " + frameId + ";\r\n");
-						that.SodiumDebuggerProcess.stdin.uncork();
-					}
+					SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
 				});
 			} else {
 				that.sendEvent('end');
@@ -84,13 +81,10 @@ export class MockRuntime extends EventEmitter {
 		return new Promise(function(resolve, reject) {
 			MockRuntime.gResolve = resolve;
 			if (that.SodiumDebuggerProcess) {
+				let cmd = "info locals;\r\n";
 				let p = SodiumUtils.WaitForStdout();
 				p.then(function () {
-					if (that.SodiumDebuggerProcess != null) {
-						that.SodiumDebuggerProcess.stdin.cork();
-						that.SodiumDebuggerProcess.stdin.write("info locals;\r\n");
-						that.SodiumDebuggerProcess.stdin.uncork();
-					}
+					SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
 				});
 			} else {
 				that.sendEvent('end');
@@ -107,13 +101,10 @@ export class MockRuntime extends EventEmitter {
 		return new Promise(function(resolve, reject) {
 			MockRuntime.gResolve = resolve;
 			if (that.SodiumDebuggerProcess) {
+				let cmd = "info frame;\r\n";
 				let p = SodiumUtils.WaitForStdout();
 				p.then(function () {
-					if (that.SodiumDebuggerProcess != null) {
-						that.SodiumDebuggerProcess.stdin.cork();
-						that.SodiumDebuggerProcess.stdin.write("info frame;\r\n");
-						that.SodiumDebuggerProcess.stdin.uncork();
-					}
+					SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
 				});
 			} else {
 				that.sendEvent('end');
@@ -128,13 +119,10 @@ export class MockRuntime extends EventEmitter {
 	public next(event: string) {
 		if (this.SodiumDebuggerProcess) {
 			let that = this;
+			let cmd = "next;\r\n";
 			let p = SodiumUtils.WaitForStdout();
 			p.then(function () {
-				if (that.SodiumDebuggerProcess != null) {
-					that.SodiumDebuggerProcess.stdin.cork();
-					that.SodiumDebuggerProcess.stdin.write("next;\r\n");
-					that.SodiumDebuggerProcess.stdin.uncork();
-				}
+				SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
 			});
 		} else {
 			this.sendEvent('end');
@@ -148,13 +136,10 @@ export class MockRuntime extends EventEmitter {
 	public stepOut() {
 		if (this.SodiumDebuggerProcess) {
 			let that = this;
+			let cmd = "finish;\r\n";
 			let p = SodiumUtils.WaitForStdout();
 			p.then(function () {
-				if (that.SodiumDebuggerProcess != null) {
-					that.SodiumDebuggerProcess.stdin.cork();
-					that.SodiumDebuggerProcess.stdin.write("finish;\r\n");
-					that.SodiumDebuggerProcess.stdin.uncork();
-				}
+				SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
 			});
 		} else {
 			this.sendEvent('end');
@@ -165,16 +150,14 @@ export class MockRuntime extends EventEmitter {
 	/**
 	 * 	 step-in
 	 */
-	public stepIn() {
+	public stepIn()
+	{
 		if (this.SodiumDebuggerProcess) {
 			let that = this;
+			let cmd = "step;\r\n"
 			let p = SodiumUtils.WaitForStdout();
 			p.then(function () {
-				if (that.SodiumDebuggerProcess != null) {
-					that.SodiumDebuggerProcess.stdin.cork();
-					that.SodiumDebuggerProcess.stdin.write("step;\r\n");
-					that.SodiumDebuggerProcess.stdin.uncork();
-				}
+				SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
 			});
 		} else {
 			this.sendEvent('end');
@@ -203,13 +186,10 @@ export class MockRuntime extends EventEmitter {
 	{
 		if (this.SodiumDebuggerProcess) {
 			let that = this;
+			let cmd = "clearallbreakpoints;\r\n";
 			let p = SodiumUtils.WaitForStdout();
 			p.then(function () {
-				if (that.SodiumDebuggerProcess != null) {
-					that.SodiumDebuggerProcess.stdin.cork();
-					that.SodiumDebuggerProcess.stdin.write("clearallbreakpoints;\r\n");
-					that.SodiumDebuggerProcess.stdin.uncork();
-				}
+				SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
 			});
 		} else {
 			this.sendEvent('end');
@@ -225,14 +205,11 @@ export class MockRuntime extends EventEmitter {
 	{
 		if (this.SodiumDebuggerProcess) {
 			//let that = this;
-			let p = SodiumUtils.WaitForStdout();
+			/*let p = SodiumUtils.WaitForStdout();
 			p.then(function () {
-				/*if (that.SodiumDebuggerProcess != null) {
-					that.SodiumDebuggerProcess.stdin.cork();
-					that.SodiumDebuggerProcess.stdin.write("clearallbreakpoints;\r\n");
-					that.SodiumDebuggerProcess.stdin.uncork();
-				}*/
-			});
+				// Not implemented yet
+				// MockRuntime.SendCommandToSodiumDebugger(that, "break \"" + path + ":" + line + "\";\r\n");
+			});*/
 		} else {
 			this.sendEvent('end');
 		}
@@ -250,13 +227,10 @@ export class MockRuntime extends EventEmitter {
 	{
 		if (this.SodiumDebuggerProcess) {
 			let that = this;
+			let cmd = "break \"" + path + ":" + line + "\";\r\n";
 			let p = SodiumUtils.WaitForStdout();
 			p.then(function () {
-				if (that.SodiumDebuggerProcess != null) {
-					that.SodiumDebuggerProcess.stdin.cork();
-					that.SodiumDebuggerProcess.stdin.write("break \"" + path + ":" + line + "\";\r\n");
-					that.SodiumDebuggerProcess.stdin.uncork();
-				}
+				SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
 			});
 		} else {
 			this.sendEvent('end');
@@ -288,13 +262,10 @@ export class MockRuntime extends EventEmitter {
 	public sendAttachRequestToSodiumServer() {
 		if (this.SodiumDebuggerProcess){
 			let that = this;
+			let cmd = "attach " + that._SodiumSessionId + ";\r\n";
 			let p = SodiumUtils.WaitForStdout();
 			p.then(function () {
-				if (that.SodiumDebuggerProcess != null) {
-					that.SodiumDebuggerProcess.stdin.cork();
-					that.SodiumDebuggerProcess.stdin.write("attach " + that._SodiumSessionId + ";\r\n");
-					that.SodiumDebuggerProcess.stdin.uncork();
-				}
+				SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
 			});
 		} else {
 			this.sendEvent('end');
@@ -309,7 +280,7 @@ export class MockRuntime extends EventEmitter {
 		let options: InputBoxOptions = {
 			prompt: "Sodium Session Id: ",
 			placeHolder: "ex: 75254",
-			value: "76664"
+			value: "27273"
 		}
 		this._SodiumSessionId = await SodiumUtils.GetInput(options);
 	}
@@ -415,16 +386,6 @@ export class MockRuntime extends EventEmitter {
 				}
 			}
 		}
-/*
-		let frameReplyMatched: any =  reply.match(/(?<FrameId>\d{1,2}) in (?<ProcedureName>[\(\)\.:\-\w\\ \(\)]+) at (?<FileName>[\.:\-\w\\]+):(?<LineNo>\d+)/);
-		if (frameReplyMatched) {
-			if (frameReplyMatched.groups) {
-				let g = frameReplyMatched.groups;
-				MockRuntime._frameId = g.groups.FrameId;
-				this.SetBreakPointId(parseFloat(g.BreakpointId), g.FileName, parseFloat(g.LineNo));
-				return;
-			}
-		}*/
 	}
 
 	public startSodiumDebuggerProcess() {
@@ -442,7 +403,7 @@ export class MockRuntime extends EventEmitter {
 				let reply = data.toString();
 				console.log(reply);
 				this.ParseDebuggerOutput(reply);
-				SodiumUtils.release();
+				SodiumUtils.ReleaseStdout(reply);
 			});
 			this.SodiumDebuggerProcess.stderr.on('data', (data) => {
 				let reply = data.toString();
@@ -495,13 +456,10 @@ export class MockRuntime extends EventEmitter {
 	{
 		if (this.SodiumDebuggerProcess){
 			let that = this;
+			let cmd = "continue;\r\n"
 			let p = SodiumUtils.WaitForStdout();
 			p.then(function () {
-				if (that.SodiumDebuggerProcess != null) {
-					that.SodiumDebuggerProcess.stdin.cork();
-					that.SodiumDebuggerProcess.stdin.write("continue;\r\n");
-					that.SodiumDebuggerProcess.stdin.uncork();
-				}
+				SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
 			});
 		} else {
 			this.sendEvent('end');
