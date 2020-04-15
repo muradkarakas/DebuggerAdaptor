@@ -1,15 +1,18 @@
 /*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
+ * Sodium Debugger Adaptor Protocol Implementation
+ * by Murad Karakaş
  *--------------------------------------------------------*/
 
-//import { readFileSync } from 'fs';
 import { EventEmitter } from 'events';
 import { ChildProcess } from 'child_process';
 import { InputBoxOptions } from 'vscode';
+import { DebugProtocol } from 'vscode-debugprotocol';
 
 const { spawn } = require('child_process');
 
 import { SodiumUtils } from './SodiumUtils';
+import { SodiumDebugSession } from './SodiumDebug';
+import { Variable } from 'vscode-debugadapter/lib/debugSession';
 
 export interface MockBreakpoint {
 	id: number;
@@ -34,92 +37,62 @@ export class MockRuntime extends EventEmitter {
 
 	public BreakPointHitInfo: SodiumBreakPointInfo = new SodiumBreakPointInfo();
 
-	// the contents (= lines) of the one and only file
-	//rivate _sourceLines: string[];
-
 	// maps from sourceFile to array of Mock breakpoints
 	private _breakPoints = new Map<string, MockBreakpoint[]>();
 
-	// since we want to send breakpoint events, we will assign an id to every event
-	// so that the frontend can match events with breakpoints.
+	// This is a temporary id. It will be replaced with real value after we get response from SodiumServer.
 	private _breakpointId = 1;
 
-	private _breakAddresses = new Set<string>();
+	public static gLocalVarResponse: DebugProtocol.VariablesResponse;
+	public static gArgsVarResponse: DebugProtocol.VariablesResponse;
+	public static gGlobalsVarResponse: DebugProtocol.VariablesResponse;
+	public static gStackTraceResponse: DebugProtocol.StackTraceResponse;
+	public static gStackTraceArguments: DebugProtocol.StackTraceArguments;
 
-	public static gResolve: Function | undefined = undefined;
+	// Reference to debug session
+	private gMockDebugSession: SodiumDebugSession;
 
-	public static gJsonObject: any;
-
-	constructor() {
+	constructor(mockDebugSession: SodiumDebugSession)
+	{
 		super();
+		this.gMockDebugSession = mockDebugSession;
 		this.startSodiumDebuggerProcess();
-	}
-
-	/**
-	 * 	Set frame number.
-	 */
-	public frame(frameId: number): any
-	{
-		let that = this;
-		return new Promise(function(resolve, reject) {
-			MockRuntime.gResolve = resolve;
-			if (that.SodiumDebuggerProcess) {
-				let cmd = "frame " + frameId + ";\r\n";
-				let p = SodiumUtils.WaitForStdout();
-				p.then(function () {
-					SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
-				});
-			} else {
-				that.sendEvent('end');
-			}
-		});
-	}
-
-	public variablesRequest() : Promise<any>
-	{
-		let that = this;
-		return new Promise(function(resolve, reject) {
-			MockRuntime.gResolve = resolve;
-			if (that.SodiumDebuggerProcess) {
-				let cmd = "info locals;\r\n";
-				let p = SodiumUtils.WaitForStdout();
-				p.then(function () {
-					SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
-				});
-			} else {
-				that.sendEvent('end');
-			}
-		});
 	}
 
 	/**
 	 * Returns a fake 'stacktrace' where every 'stackframe' is a word from the current line.
 	 */
-	public stackRequest(startFrame: number, endFrame: number): any
+	public stackRequest(debugsession: SodiumDebugSession, response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments)
 	{
-		let that = this;
-		return new Promise(function(resolve, reject) {
-			MockRuntime.gResolve = resolve;
-			if (that.SodiumDebuggerProcess) {
-				let cmd = "info frame;\r\n";
-				let p = SodiumUtils.WaitForStdout();
-				p.then(function () {
-					SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
-				});
-			} else {
-				that.sendEvent('end');
-			}
-		});
+		if (this.SodiumDebuggerProcess) {
+			MockRuntime.gStackTraceResponse = response;
+			MockRuntime.gStackTraceArguments = args;
+			let cmd = "info frame;\r\n";
+			let p = SodiumUtils.WaitForStdout();
+			let that = this;
+			p.then(function () {
+				SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
+			});
+		} else {
+			this.sendEvent('end');
+		}
 	}
 
-
-	/**
-	 * 	 next
-	 */
-	public next(event: string) {
+	public variablesRequest(debugsession: SodiumDebugSession, response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments)
+	{
 		if (this.SodiumDebuggerProcess) {
+			let cmd;
+			if (args.variablesReference == 1000) {
+				MockRuntime.gLocalVarResponse = response;
+				cmd = "info locals;\r\n";
+			} else if (args.variablesReference == 1001) {
+				MockRuntime.gArgsVarResponse = response;
+				cmd = "info args;\r\n";
+			} else if (args.variablesReference == 1002) {
+				MockRuntime.gGlobalsVarResponse = response;
+				cmd = "info globals;\r\n";
+			}
 			let that = this;
-			let cmd = "next;\r\n";
 			let p = SodiumUtils.WaitForStdout();
 			p.then(function () {
 				SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
@@ -127,7 +100,197 @@ export class MockRuntime extends EventEmitter {
 		} else {
 			this.sendEvent('end');
 		}
-		this.sendEvent(event);
+	}
+
+	public ParseDebuggerOutput(reply: string)
+	{
+		let treadIdReplyMatched: any = reply.replace("\r\n", "").match(/\[New Thread (?<BreakpointId>\d+)\]/);
+		if (treadIdReplyMatched) {
+			return;
+		}
+
+		let frameSetReplyMatched: any = reply.match(/\{ *"frameset" *: *"(?<Frame>\d+)" *\}/);
+		if (frameSetReplyMatched) {
+			let json = JSON.parse(reply.split("$").join("\\\\").replace("\r\n", ""));
+			if (json) {
+				// nothing to do
+				return;
+			}
+		}
+
+		let jsonCandidate: any = reply.replace("\r\n", "").split("$").join("\\").match(/\[[a-zA-Z0-9\"., \:\{\}\]]*/);
+		if (jsonCandidate) {
+			let json = JSON.parse(reply.split("$").join("\\\\").replace("\r\n", ""));
+			if (json) {
+				if (json.frames) {
+					const startFrame = (MockRuntime.gStackTraceArguments.startFrame) ? MockRuntime.gStackTraceArguments.startFrame: 0;
+					const maxLevels = (MockRuntime.gStackTraceArguments.levels) ? MockRuntime.gStackTraceArguments.levels: 1000;
+					const endFrame = startFrame + maxLevels;
+					var vars = json;
+					if (vars.frames.length > 0) {
+						if (vars.frames[0].procedure) {
+							const frames = new Array<any>();
+							for (let i = startFrame; i < Math.min(endFrame, vars.frames.length); i++) {
+								frames.push({
+									id: parseFloat(vars.frames[i].stackid),
+									index: i,
+									name: vars.frames[i].procedure + '()',
+									file: SodiumUtils.SanitizePathForSodiumDebugger(vars.frames[i].file),
+									line: parseFloat(vars.frames[i].line),
+									source: this.gMockDebugSession.createSource(vars.frames[i].file),
+									column: 1
+								});
+							}
+							MockRuntime.gStackTraceResponse.body = {
+								stackFrames: frames,
+								totalFrames: frames.length
+							}
+							this.gMockDebugSession.sendResponse(MockRuntime.gStackTraceResponse);
+						}
+					}
+				}
+				else if (json.locals)
+				{
+					const variables: Variable[] = [];
+					for(let i = 0; i < json.locals.length; i++) {
+						let v = new Variable(json.locals[i].name, json.locals[i].value);
+						// @ts-ignore
+						v.type = json.locals[i].type;
+						variables.push(v);
+					}
+					MockRuntime.gLocalVarResponse.body = {
+						variables: variables
+					};
+					this.gMockDebugSession.sendResponse(MockRuntime.gLocalVarResponse);
+				}
+				else if (json.args)
+				{
+					const variables: Variable[] = [];
+					for(let i = 0; i < json.args.length; i++) {
+						let v = new Variable(json.args[i].name, json.args[i].value);
+						// @ts-ignore
+						v.type = json.args[i].type;
+						variables.push(v);
+					}
+					MockRuntime.gArgsVarResponse.body = {
+						variables: variables
+					};
+					this.gMockDebugSession.sendResponse(MockRuntime.gArgsVarResponse);
+				}
+				else if (json.globals) {
+					const variables: Variable[] = [];
+					for(let i = 0; i < json.globals.length; i++) {
+						let v = new Variable(json.globals[i].name, json.globals[i].value);
+						// @ts-ignore
+						v.type = json.globals[i].type;
+						variables.push(v);
+					}
+					MockRuntime.gGlobalsVarResponse.body = {
+						variables: variables
+					};
+					this.gMockDebugSession.sendResponse(MockRuntime.gGlobalsVarResponse);
+				}
+				return;
+			}
+		}
+
+		/*let jsonArrayReplyMatched = reply.replace("\r\n", "").split("$").join("\\").match(/\[[a-zA-Z0-9\"\., \-\:\{\}\\\$_]*\]/);
+		if (jsonArrayReplyMatched) {
+			let json = JSON.parse(reply.split("$").join("\\\\").replace("\r\n", ""));
+			if (json) {
+
+				return;
+			}
+		}*/
+
+		// break command response
+		/*
+		 *	Breakpoint 2 at 0x0000:  file welcome.sqlx, line 6.
+		 */
+		let newBreakpointReplyMatched: any = reply.match(/(?<BreakpointId>\d{1,3}) at 0x0000:  file (?<FileName>[\.:\-\w\\]+), line (?<LineNo>\d+)/);
+		if (newBreakpointReplyMatched) {
+			if (newBreakpointReplyMatched.groups) {
+				let g = newBreakpointReplyMatched.groups;
+				//this._currentLine = g.LineNo + 1;
+				this.SetBreakPointId(parseFloat(g.BreakpointId), g.FileName, parseFloat(g.LineNo));
+				return;
+			}
+		}
+
+		// Breakpoint hit response
+		/*
+		 *  Breakpoint 2, cb_oracle.logon2oracle() at C:\projects\Sodium\Setup\Sodium-Site\welcome.sqlx:6
+		 *  C:\projects\Sodium\Setup\Sodium-Site\welcome.sqlx:6:1:beg:0x0000
+		 */
+		let breakpointHitReplyMatched: any = reply.match(/(?<BreakpointId>\d{1,3}), (?<ProcedureName>[\(\)\.:\-\w\\]+) at (?<FileName>[\.:\-\w\\]+):(?<LineNo>\d{1,3})/);
+		if (breakpointHitReplyMatched) {
+			if (breakpointHitReplyMatched.groups) {
+				let g = breakpointHitReplyMatched.groups;
+				if (g.BreakpointId)
+					this.BreakPointHitInfo.id = parseFloat(g.BreakpointId);
+				if (g.ProcedureName)
+					this.BreakPointHitInfo.procedure = g.ProcedureName;
+				if (g.FileName)
+					this.BreakPointHitInfo.file = g.FileName;
+				if (g.LineNo)
+					this.BreakPointHitInfo.line = parseFloat(g.LineNo);
+				this.sendEvent('stopOnBreakpoint');
+				return;
+			}
+		} else {
+			// next response
+			/*
+			*  C:\projects\Sodium\Setup\Sodium-Site\welcome.sqlx:6:1:beg:0x0000
+			*/
+			breakpointHitReplyMatched = reply.match(/\32\32(?<Drive>.):(?<FileName>[\.\-\w\\]+):(?<LineNo>\d{1,3})/);
+			if (breakpointHitReplyMatched) {
+				if (breakpointHitReplyMatched.groups) {
+					let g = breakpointHitReplyMatched.groups;
+					if (g.FileName)
+						this.BreakPointHitInfo.file = g.Drive + ":" + g.FileName;
+					if (g.LineNo)
+						this.BreakPointHitInfo.line = parseFloat(g.LineNo);
+					this.sendEvent('stopOnBreakpoint');
+					return;
+				}
+			}
+		}
+	}
+
+	/**
+	 * 	Set frame number.
+	 */
+	public frame(frameId: number)
+	{
+		if (this.SodiumDebuggerProcess) {
+			let cmd = "frame " + frameId + ";\r\n";
+			let that = this;
+			let p = SodiumUtils.WaitForStdout();
+			p.then(function () {
+				SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
+			});
+		} else {
+			this.sendEvent('end');
+		}
+	}
+
+	/**
+	 * 	 next
+	 */
+	public next(event: string)
+	{
+		if (this.SodiumDebuggerProcess) {
+			let that = this;
+			let cmd = "next;\r\n";
+			let p = SodiumUtils.WaitForStdout();
+			p.then(function () {
+				SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
+			});
+			this.sendEvent(event);
+		} else {
+			this.sendEvent('end');
+		}
+
 	}
 
 	/**
@@ -213,7 +376,7 @@ export class MockRuntime extends EventEmitter {
 		} else {
 			this.sendEvent('end');
 		}
-		this._breakAddresses.clear();
+		//this._breakAddresses.clear();
 	}
 
 	public isSodiumSessionIdSet(): string | undefined {
@@ -280,112 +443,9 @@ export class MockRuntime extends EventEmitter {
 		let options: InputBoxOptions = {
 			prompt: "Sodium Session Id: ",
 			placeHolder: "ex: 75254",
-			value: "27273"
+			value: "18557"
 		}
 		this._SodiumSessionId = await SodiumUtils.GetInput(options);
-	}
-
-	public ParseDebuggerOutput(reply: string)
-	{
-		let treadIdReplyMatched: any = reply.replace("\r\n", "").match(/\[New Thread (?<BreakpointId>\d+)\]/);
-		if (treadIdReplyMatched) {
-			return;
-		}
-
-		let frameSetReplyMatched: any = reply.match(/\{ *"frameset" *: *"(?<Frame>\d+)" *\}/);
-		if (frameSetReplyMatched) {
-			let json = JSON.parse(reply.split("$").join("\\\\").replace("\r\n", ""));
-			if (json) {
-				MockRuntime.gJsonObject = json;
-				if (MockRuntime.gResolve) {
-					MockRuntime.gResolve();
-					MockRuntime.gResolve = undefined;
-				}
-				return;
-			}
-		}
-
-		let jsonArrayReplyMatched2: any = reply.replace("\r\n", "").split("$").join("\\").match(/\[[a-zA-Z0-9\"., \:\{\}]*\]/);
-		if (jsonArrayReplyMatched2) {
-			let json = JSON.parse(reply.split("$").join("\\\\").replace("\r\n", ""));
-			if (json) {
-				MockRuntime.gJsonObject = json;
-				if (MockRuntime.gResolve) {
-					MockRuntime.gResolve();
-					MockRuntime.gResolve = undefined;
-				}
-				return;
-			}
-		}
-
-		let jsonArrayReplyMatched = reply.replace("\r\n", "").split("$").join("\\").match(/\[[\{\}a-zA-Z0-9\: \"_,\.\-\\$]*\]/);
-		if (jsonArrayReplyMatched) {
-			let json = JSON.parse(reply.split("$").join("\\\\").replace("\r\n", ""));
-			if (json) {
-				MockRuntime.gJsonObject = json;
-				if (MockRuntime.gResolve) {
-					MockRuntime.gResolve();
-					MockRuntime.gResolve = undefined;
-				}
-				return;
-			}
-		}
-
-		// break command response
-		/*
-		 *	Breakpoint 2 at 0x0000:  file welcome.sqlx, line 6.
-		 */
-		let newBreakpointReplyMatched: any = reply.match(/(?<BreakpointId>\d{1,3}) at 0x0000:  file (?<FileName>[\.:\-\w\\]+), line (?<LineNo>\d+)/);
-		if (newBreakpointReplyMatched) {
-			if (newBreakpointReplyMatched.groups) {
-				let g = newBreakpointReplyMatched.groups;
-				//this._currentLine = g.LineNo + 1;
-				this.SetBreakPointId(parseFloat(g.BreakpointId), g.FileName, parseFloat(g.LineNo));
-				return;
-			}
-		}
-
-		// Breakpoint hit response
-		/*
-		 *  Breakpoint 2, cb_oracle.logon2oracle() at C:\projects\Sodium\Setup\Sodium-Site\welcome.sqlx:6
-		 *  C:\projects\Sodium\Setup\Sodium-Site\welcome.sqlx:6:1:beg:0x0000
-		 */
-		let breakpointHitReplyMatched: any = reply.match(/(?<BreakpointId>\d{1,3}), (?<ProcedureName>[\(\)\.:\-\w\\]+) at (?<FileName>[\.:\-\w\\]+):(?<LineNo>\d{1,3})/);
-		if (breakpointHitReplyMatched) {
-			if (breakpointHitReplyMatched.groups) {
-				let g = breakpointHitReplyMatched.groups;
-				if (g.BreakpointId)
-					this.BreakPointHitInfo.id = parseFloat(g.BreakpointId);
-				if (g.ProcedureName)
-					this.BreakPointHitInfo.procedure = g.ProcedureName;
-				if (g.FileName)
-					this.BreakPointHitInfo.file = g.FileName;
-				if (g.LineNo)
-					this.BreakPointHitInfo.line = parseFloat(g.LineNo);
-
-				this.sendEvent('stopOnBreakpoint');
-				return;
-			}
-		} else {
-			// next response
-			/*
-			*  C:\projects\Sodium\Setup\Sodium-Site\welcome.sqlx:6:1:beg:0x0000
-			*/
-			breakpointHitReplyMatched = reply.match(/\32\32(?<Drive>.):(?<FileName>[\.\-\w\\]+):(?<LineNo>\d{1,3})/);
-			if (breakpointHitReplyMatched) {
-				if (breakpointHitReplyMatched.groups) {
-					let g = breakpointHitReplyMatched.groups;
-					if (g.FileName)
-						this.BreakPointHitInfo.file = g.Drive + ":" + g.FileName;
-					if (g.LineNo)
-						this.BreakPointHitInfo.line = parseFloat(g.LineNo);
-
-					//this.BreakPointHitInfo = g;
-					this.sendEvent('stopOnBreakpoint');
-					return;
-				}
-			}
-		}
 	}
 
 	public startSodiumDebuggerProcess() {
@@ -401,7 +461,6 @@ export class MockRuntime extends EventEmitter {
 
 			this.SodiumDebuggerProcess.stdout.on('data', (data) => {
 				let reply = data.toString();
-				console.log(reply);
 				this.ParseDebuggerOutput(reply);
 				SodiumUtils.ReleaseStdout(reply);
 			});
@@ -501,7 +560,7 @@ export class MockRuntime extends EventEmitter {
 	 */
 	public setDataBreakpoint(address: string): boolean {
 		if (address) {
-			this._breakAddresses.add(address);
+			//this._breakAddresses.add(address);
 			return true;
 		}
 		return false;

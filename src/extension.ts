@@ -1,12 +1,13 @@
 /*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
+ * Sodium Debugger Adaptor Protocol Implementation
+ * by Murad Karakaş
  *--------------------------------------------------------*/
 
 'use strict';
 
 import * as vscode from 'vscode';
 import { WorkspaceFolder, DebugConfiguration, ProviderResult, CancellationToken } from 'vscode';
-import { MockDebugSession } from './mockDebug';
+import { SodiumDebugSession } from './SodiumDebug';
 import * as Net from 'net';
 
 /*
@@ -15,17 +16,17 @@ import * as Net from 'net';
  */
 const runMode: 'external' | 'server' | 'inline' = 'inline';
 
-export function activate(context: vscode.ExtensionContext) {
-
+export function activate(context: vscode.ExtensionContext)
+{
 	context.subscriptions.push(vscode.commands.registerCommand('extension.sodium-debug.getProgramName', config => {
 		return vscode.window.showInputBox({
-			placeHolder: "Please enter the name of a markdown file in the workspace folder",
-			value: "readme.md"
+			placeHolder: "Please enter the name of a sqlx file in the workspace folder",
+			value: ""
 		});
 	}));
 
 	// register a configuration provider for 'sodium' debug type
-	const provider = new MockConfigurationProvider();
+	const provider = new SodiumConfigurationProvider();
 	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('sodium', provider));
 
 	// debug adapters can be run in different ways by using a vscode.DebugAdapterDescriptorFactory:
@@ -67,14 +68,14 @@ export function deactivate() {
 	// nothing to do
 }
 
-class MockConfigurationProvider implements vscode.DebugConfigurationProvider {
+class SodiumConfigurationProvider implements vscode.DebugConfigurationProvider {
 
 	/**
 	 * Massage a debug configuration just before a debug session is being launched,
 	 * e.g. add all missing attributes to the debug configuration.
 	 */
-	resolveDebugConfiguration(folder: WorkspaceFolder | undefined, config: DebugConfiguration, token?: CancellationToken): ProviderResult<DebugConfiguration> {
-
+	resolveDebugConfiguration(folder: WorkspaceFolder | undefined, config: DebugConfiguration, token?: CancellationToken): ProviderResult<DebugConfiguration>
+	{
 		const editor = vscode.window.activeTextEditor;
 		if (editor) {
 			const fileExt = editor.document.uri.fsPath.indexOf(".sqlx");
@@ -102,13 +103,12 @@ class MockConfigurationProvider implements vscode.DebugConfigurationProvider {
 				});
 			}
 		}
-
 		return config;
 	}
 }
 
-class DebugAdapterExecutableFactory implements vscode.DebugAdapterDescriptorFactory {
-
+class DebugAdapterExecutableFactory implements vscode.DebugAdapterDescriptorFactory
+{
 	// The following use of a DebugAdapter factory shows how to control what debug adapter executable is used.
 	// Since the code implements the default behavior, it is absolutely not neccessary and we show it here only for educational purpose.
 
@@ -143,7 +143,7 @@ class MockDebugAdapterDescriptorFactory implements vscode.DebugAdapterDescriptor
 		if (!this.server) {
 			// start listening on a random port
 			this.server = Net.createServer(socket => {
-				const session = new MockDebugSession();
+				const session = new SodiumDebugSession();
 				session.setRunAsServer(true);
 				session.start(<NodeJS.ReadableStream>socket, socket);
 			}).listen(0);
@@ -163,6 +163,6 @@ class MockDebugAdapterDescriptorFactory implements vscode.DebugAdapterDescriptor
 class InlineDebugAdapterFactory implements vscode.DebugAdapterDescriptorFactory {
 
 	createDebugAdapterDescriptor(_session: vscode.DebugSession): ProviderResult<vscode.DebugAdapterDescriptor> {
-		return new vscode.DebugAdapterInlineImplementation(new MockDebugSession());
+		return new vscode.DebugAdapterInlineImplementation(new SodiumDebugSession());
 	}
 }

@@ -1,25 +1,31 @@
-import { window, InputBoxOptions } from 'vscode';
+/*---------------------------------------------------------
+ * Sodium Debugger Adaptor Protocol Implementation
+ * by Murad Karakaş
+ *--------------------------------------------------------*/
 
+import { window, InputBoxOptions } from 'vscode';
 import { Mutex } from 'await-semaphore';
 import { MockRuntime } from './mockRuntime';
 
 export class SodiumUtils
 {
+	public static commandCounter = 0;
 	public static mutex = new Mutex();
 	private static _stdoutResolver: Function | undefined;
 
 	public static ReleaseStdout(reply: string)
 	{
-		if (SodiumUtils._stdoutResolver)
+		if (SodiumUtils._stdoutResolver) {
+			console.log("    > REPLIED (" + SodiumUtils.commandCounter++ + "): " + reply);
 			SodiumUtils._stdoutResolver();
+		}
 		SodiumUtils._stdoutResolver = undefined;
 	}
 
 	public static async WaitForStdout(): Promise<any>
 	{
 		SodiumUtils._stdoutResolver = await SodiumUtils.mutex.acquire();
-
-		return new Promise<any>(function(a) { a() });
+		return SodiumUtils._stdoutResolver;
 	}
 
 	public static SendCommandToSodiumDebugger(runtime: MockRuntime, command: string): void
@@ -28,6 +34,7 @@ export class SodiumUtils
 			runtime.SodiumDebuggerProcess.stdin.cork();
 			runtime.SodiumDebuggerProcess.stdin.write(command);
 			runtime.SodiumDebuggerProcess.stdin.uncork();
+			console.log(">>> COMMAND (" + SodiumUtils.commandCounter + "): " + command);
 		}
 	}
 
@@ -36,7 +43,8 @@ export class SodiumUtils
 		return path.replace("C:", "c:").replace("D:", "d:").replace("E:", "d:");
 	}
 
-	public static async GetInput(options: InputBoxOptions): Promise<any> {
+	public static async GetInput(options: InputBoxOptions): Promise<any>
+	{
 		let retval: any = undefined;
 
 		let input = window.showInputBox(options);

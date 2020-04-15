@@ -1,7 +1,8 @@
 /*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
+ * Sodium Debugger Adaptor Protocol Implementation
+ * by Murad Karakaş
  *--------------------------------------------------------*/
 
- import { MockDebugSession } from './mockDebug';
+ import { SodiumDebugSession } from './SodiumDebug';
 
- MockDebugSession.run(MockDebugSession);
+ SodiumDebugSession.run(SodiumDebugSession);

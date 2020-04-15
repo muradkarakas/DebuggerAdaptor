@@ -1,12 +1,12 @@
 /*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
+ * Sodium Debugger Adaptor Protocol Implementation
+ * by Murad Karakaş
  *--------------------------------------------------------*/
 
 import {
 	Logger, logger,
 	LoggingDebugSession,
 	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
-	//ProgressStartEvent, ProgressUpdateEvent, ProgressEndEvent,
 	Thread, Scope, Source, Handles, Breakpoint, ContinuedEvent
 } from 'vscode-debugadapter';
 
@@ -14,12 +14,10 @@ import { readFileSync } from 'fs';
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { basename, dirname } from 'path';
 import { MockRuntime, MockBreakpoint } from './mockRuntime';
-import { Variable } from 'vscode-debugadapter';
 
 const { Subject } = require('await-notify');
 
 import { SodiumUtils } from './SodiumUtils';
-
 
 /**
  * This interface describes the mock-debug specific launch attributes
@@ -40,8 +38,8 @@ export class SodiumSource extends Source {
 	public dir: string;
 }
 
-export class MockDebugSession extends LoggingDebugSession {
-
+export class SodiumDebugSession extends LoggingDebugSession
+{
 	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
 	private static THREAD_ID = 1;
 
@@ -61,32 +59,32 @@ export class MockDebugSession extends LoggingDebugSession {
 	 * We configure the default implementation of a debug adapter here.
 	 */
 	public constructor() {
-		super("mock-debug.txt");
+		super();
 
 		// this debugger uses zero-based lines and columns
 		this.setDebuggerLinesStartAt1(true);
 		this.setDebuggerColumnsStartAt1(true);
 
-		this._runtime = new MockRuntime();
+		this._runtime = new MockRuntime(this);
 
 		// setup event handlers
 		this._runtime.on("Continuing.", () => {
-			this.sendEvent(new ContinuedEvent(MockDebugSession.THREAD_ID));
+			this.sendEvent(new ContinuedEvent(SodiumDebugSession.THREAD_ID));
 		});
 		this._runtime.on('stopOnEntry', () => {
-			this.sendEvent(new StoppedEvent('entry', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('entry', SodiumDebugSession.THREAD_ID));
 		});
 		this._runtime.on('stopOnStep', () => {
-			this.sendEvent(new StoppedEvent('step', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('step', SodiumDebugSession.THREAD_ID));
 		});
 		this._runtime.on('stopOnBreakpoint', () => {
-			this.sendEvent(new StoppedEvent('breakpoint', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('breakpoint', SodiumDebugSession.THREAD_ID));
 		});
 		this._runtime.on('stopOnDataBreakpoint', () => {
-			this.sendEvent(new StoppedEvent('data breakpoint', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('data breakpoint', SodiumDebugSession.THREAD_ID));
 		});
 		this._runtime.on('stopOnException', () => {
-			this.sendEvent(new StoppedEvent('exception', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('exception', SodiumDebugSession.THREAD_ID));
 		});
 		this._runtime.on('breakpointValidated', (bp: MockBreakpoint) => {
 			this.sendEvent(new BreakpointEvent('changed', <DebugProtocol.Breakpoint>{ verified: bp.verified, id: bp.id }));
@@ -107,6 +105,16 @@ export class MockDebugSession extends LoggingDebugSession {
 		this._runtime.on('end', () => {
 			this.sendEvent(new TerminatedEvent());
 		});
+	}
+
+	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void
+	{
+		this._runtime.stackRequest(this, response, args);
+	}
+
+	protected async variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments, request?: DebugProtocol.Request)
+	{
+		this._runtime.variablesRequest(this, response, args);
 	}
 
 	protected disconnectRequest(response: DebugProtocol.DisconnectResponse, args: DebugProtocol.DisconnectArguments, request?: DebugProtocol.Request): void {
@@ -227,7 +235,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		// runtime supports no threads so just return a default thread.
 		response.body = {
 			threads: [
-				new Thread(MockDebugSession.THREAD_ID, "thread 1")
+				new Thread(SodiumDebugSession.THREAD_ID, "thread 1")
 			]
 		};
 		this.sendResponse(response);
@@ -245,67 +253,6 @@ export class MockDebugSession extends LoggingDebugSession {
 			]
 		};
 		this.sendResponse(response);
-	}
-
-	protected async variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments, request?: DebugProtocol.Request)
-	{
-		const variables: Variable[] = [];
-		(async () => {
-			await this._runtime.variablesRequest();
-			var vars = MockRuntime.gJsonObject;
-			if (vars) {
-				if (args.variablesReference == 1000) {
-					if (vars.locals) {
-						for(let i = 0; i < vars.locals.length; i++) {
-							let v = new Variable(vars.locals[i].name, vars.locals[i].value);
-							// @ts-ignore
-							v.type = vars.locals[i].type;
-							variables.push(v);
-						}
-					}
-				}
-			}
-			response.body = {
-				variables: variables
-			};
-			this.sendResponse(response);
-		})();
-	}
-
-	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void
-	{
-		(async () => {
-			const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
-			const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
-			const endFrame = startFrame + maxLevels;
-
-			await this._runtime.stackRequest(startFrame, endFrame);
-
-			var vars = MockRuntime.gJsonObject;
-			if (vars && vars.frames) {
-				if (vars.frames.length > 0) {
-					if (vars.frames[0].procedure) {
-						const frames = new Array<any>();
-						for (let i = startFrame; i < Math.min(endFrame, vars.frames.length); i++) {
-							frames.push({
-								id: parseFloat(vars.frames[i].stackid),
-								index: i,
-								name: vars.frames[i].procedure + '()',
-								file: SodiumUtils.SanitizePathForSodiumDebugger(vars.frames[i].file),
-								line: parseFloat(vars.frames[i].line),
-								source: this.createSource(vars.frames[i].file),
-								column: 1
-							});
-						}
-						response.body = {
-							stackFrames: frames,
-							totalFrames: frames.length
-						}
-					}
-				}
-				this.sendResponse(response);
-			}
-		})();
 	}
 
 	protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {
@@ -380,7 +327,7 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	//---- helpers
 
-	private createSource(filePath: string): SodiumSource
+	public createSource(filePath: string): SodiumSource
 	{
 		filePath = SodiumUtils.SanitizePathForSodiumDebugger(filePath);
 
