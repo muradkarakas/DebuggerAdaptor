@@ -1,5 +1,6 @@
 # VS Code Sodium Debugger Adaptor Extension for Sodium
 
-For help:
+For details:
 
+https://muradkarakas.gitbook.io/sodium_documentation/
 
