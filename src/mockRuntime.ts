@@ -43,11 +43,11 @@ export class MockRuntime extends EventEmitter {
 	// This is a temporary id. It will be replaced with real value after we get response from SodiumServer.
 	private _breakpointId = 1;
 
-	public static gLocalVarResponse: DebugProtocol.VariablesResponse;
-	public static gArgsVarResponse: DebugProtocol.VariablesResponse;
-	public static gGlobalsVarResponse: DebugProtocol.VariablesResponse;
-	public static gStackTraceResponse: DebugProtocol.StackTraceResponse;
-	public static gStackTraceArguments: DebugProtocol.StackTraceArguments;
+	public gLocalVarResponse: DebugProtocol.VariablesResponse;
+	public gArgsVarResponse: DebugProtocol.VariablesResponse;
+	public gGlobalsVarResponse: DebugProtocol.VariablesResponse;
+	public gStackTraceResponse: DebugProtocol.StackTraceResponse;
+	public gStackTraceArguments: DebugProtocol.StackTraceArguments;
 
 	// Reference to debug session
 	private gMockDebugSession: SodiumDebugSession;
@@ -65,8 +65,8 @@ export class MockRuntime extends EventEmitter {
 	public stackRequest(debugsession: SodiumDebugSession, response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments)
 	{
 		if (this.SodiumDebuggerProcess) {
-			MockRuntime.gStackTraceResponse = response;
-			MockRuntime.gStackTraceArguments = args;
+			this.gStackTraceResponse = response;
+			this.gStackTraceArguments = args;
 			let cmd = "info frame;\r\n";
 			let p = SodiumUtils.WaitForStdout();
 			let that = this;
@@ -83,13 +83,13 @@ export class MockRuntime extends EventEmitter {
 		if (this.SodiumDebuggerProcess) {
 			let cmd;
 			if (args.variablesReference == 1000) {
-				MockRuntime.gLocalVarResponse = response;
+				this.gLocalVarResponse = response;
 				cmd = "info locals;\r\n";
 			} else if (args.variablesReference == 1001) {
-				MockRuntime.gArgsVarResponse = response;
+				this.gArgsVarResponse = response;
 				cmd = "info args;\r\n";
 			} else if (args.variablesReference == 1002) {
-				MockRuntime.gGlobalsVarResponse = response;
+				this.gGlobalsVarResponse = response;
 				cmd = "info globals;\r\n";
 			}
 			let that = this;
@@ -123,8 +123,8 @@ export class MockRuntime extends EventEmitter {
 			let json = JSON.parse(reply.split("$").join("\\\\").replace("\r\n", ""));
 			if (json) {
 				if (json.frames) {
-					const startFrame = (MockRuntime.gStackTraceArguments.startFrame) ? MockRuntime.gStackTraceArguments.startFrame: 0;
-					const maxLevels = (MockRuntime.gStackTraceArguments.levels) ? MockRuntime.gStackTraceArguments.levels: 1000;
+					const startFrame = (this.gStackTraceArguments.startFrame) ? this.gStackTraceArguments.startFrame: 0;
+					const maxLevels = (this.gStackTraceArguments.levels) ? this.gStackTraceArguments.levels: 1000;
 					const endFrame = startFrame + maxLevels;
 					var vars = json;
 					if (vars.frames.length > 0) {
@@ -141,11 +141,11 @@ export class MockRuntime extends EventEmitter {
 									column: 1
 								});
 							}
-							MockRuntime.gStackTraceResponse.body = {
+							this.gStackTraceResponse.body = {
 								stackFrames: frames,
 								totalFrames: frames.length
 							}
-							this.gMockDebugSession.sendResponse(MockRuntime.gStackTraceResponse);
+							this.gMockDebugSession.sendResponse(this.gStackTraceResponse);
 						}
 					}
 				}
@@ -158,10 +158,10 @@ export class MockRuntime extends EventEmitter {
 						v.type = json.locals[i].type;
 						variables.push(v);
 					}
-					MockRuntime.gLocalVarResponse.body = {
+					this.gLocalVarResponse.body = {
 						variables: variables
 					};
-					this.gMockDebugSession.sendResponse(MockRuntime.gLocalVarResponse);
+					this.gMockDebugSession.sendResponse(this.gLocalVarResponse);
 				}
 				else if (json.args)
 				{
@@ -172,10 +172,10 @@ export class MockRuntime extends EventEmitter {
 						v.type = json.args[i].type;
 						variables.push(v);
 					}
-					MockRuntime.gArgsVarResponse.body = {
+					this.gArgsVarResponse.body = {
 						variables: variables
 					};
-					this.gMockDebugSession.sendResponse(MockRuntime.gArgsVarResponse);
+					this.gMockDebugSession.sendResponse(this.gArgsVarResponse);
 				}
 				else if (json.globals) {
 					const variables: Variable[] = [];
@@ -185,10 +185,10 @@ export class MockRuntime extends EventEmitter {
 						v.type = json.globals[i].type;
 						variables.push(v);
 					}
-					MockRuntime.gGlobalsVarResponse.body = {
+					this.gGlobalsVarResponse.body = {
 						variables: variables
 					};
-					this.gMockDebugSession.sendResponse(MockRuntime.gGlobalsVarResponse);
+					this.gMockDebugSession.sendResponse(this.gGlobalsVarResponse);
 				}
 				return;
 			}
@@ -443,7 +443,7 @@ export class MockRuntime extends EventEmitter {
 		let options: InputBoxOptions = {
 			prompt: "Sodium Session Id: ",
 			placeHolder: "ex: 75254",
-			value: "18557"
+			value: "25222"
 		}
 		this._SodiumSessionId = await SodiumUtils.GetInput(options);
 	}

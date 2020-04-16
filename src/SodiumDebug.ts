@@ -107,6 +107,14 @@ export class SodiumDebugSession extends LoggingDebugSession
 		});
 	}
 
+	protected evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments, request?: DebugProtocol.Request): void
+	{
+		response.body = response.body || {};
+		response.body.result = "Not impelemted yet By Sodium Debugger Adaptor. All variables are shown in 'Variables' Pane in VS Code";
+		response.body.variablesReference = 0;
+		this.sendResponse(response);
+	}
+
 	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void
 	{
 		this._runtime.stackRequest(this, response, args);
@@ -136,8 +144,8 @@ export class SodiumDebugSession extends LoggingDebugSession
 	 * The 'initialize' request is the first request called by the frontend
 	 * to interrogate the features the debug adapter provides.
 	 */
-	protected async initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): Promise<void> {
-		let that = this;
+	protected async initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): Promise<void>
+	{
 		await this._runtime.GetSodiumSessionId();
 
 		// build and return the capabilities of this debug adapter:
@@ -147,13 +155,20 @@ export class SodiumDebugSession extends LoggingDebugSession
 		response.body.supportsConfigurationDoneRequest = true;
 
 		// make VS Code to use 'evaluate' when hovering over source
-		response.body.supportsEvaluateForHovers = false;
+		response.body.supportsEvaluateForHovers = true;
 
 		// make VS Code to show a 'step back' button
 		response.body.supportsStepBack = false;
 
 		// make VS Code to support data breakpoints
 		response.body.supportsDataBreakpoints = false;
+
+		response.body.supportsGotoTargetsRequest = false;
+
+		// This default debug adapter does not support the 'format' attribute on the 'variables', 'evaluate', and 'stackTrace' request.
+		response.body.supportsValueFormattingOptions = true;
+
+		response.body.supportsRestartFrame = false;
 
 		// make VS Code to support completion in REPL
 		response.body.supportsCompletionsRequest = false;
@@ -165,12 +180,12 @@ export class SodiumDebugSession extends LoggingDebugSession
 		// make VS Code send the breakpointLocations request
 		response.body.supportsBreakpointLocationsRequest = false;
 
-		that.sendResponse(response);
+		this.sendResponse(response);
 
 		// since this debug adapter can accept configuration requests like 'setBreakpoint' at any time,
 		// we request them early by sending an 'initializeRequest' to the frontend.
 		// The frontend will end the configuration sequence by calling 'configurationDone' request.
-		that.sendEvent(new InitializedEvent());
+		this.sendEvent(new InitializedEvent());
 	}
 
 	/**
