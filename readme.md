@@ -1,4 +1,5 @@
-# VS Code Sodium Debugger Adaptor Extension for Sodium
+# VS Code Debugger Adaptor Implementation for Sodium
+## By Murad Karakas
 
 For details:
 
