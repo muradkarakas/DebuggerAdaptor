@@ -71,17 +71,18 @@
 				"configurationAttributes": {
 					"attach": {
 						"required": [
-
+							"sessionId",
+							"sdPath"
 						],
 						"properties": {
-							"program": {
-								"type": "string",
-								"description": "Absolute path to a text file.",
-								"default": "${workspaceFolder}/${command:AskForProgramName}"
-							},
 							"sessionId": {
 								"type": "number",
 								"description": "Sodium session id to attach."
+							},
+							"sdPath": {
+								"type": "string",
+								"description": "Sodium Debugger path including file name.",
+								"default": "c:\\Sodium\\SodiumDebugger.exe"
 							}
 						}
 					}
@@ -91,8 +92,8 @@
 						"type": "sodium",
 						"request": "attach",
 						"name": "Sodium Debugger",
-						"program": "${workspaceFolder}/${command:AskForProgramName}",
-						"sessionId": 0
+						"sessionId": 0,
+						"sdPath": "c:\\Sodium\\SodiumDebugger.exe"
 					}
 				],
 				"configurationSnippets": [
@@ -103,7 +104,8 @@
 							"type": "sodium",
 							"request": "attach",
 							"name": "Sodium Debugger",
-							"program": "^\"\\${workspaceFolder}/\\${command:AskForProgramName}\""
+							"sessionId": 0,
+							"sdPath": "c:\\Sodium\\SodiumDebugger.exe"
 						}
 					}
 				],

@@ -90,11 +90,20 @@ class SodiumConfigurationProvider implements vscode.DebugConfigurationProvider {
 			}
 		}
 
+		// Reading session id full path from config
 		if (config) {
 			if (config.sessionId) {
 				MockRuntime._SodiumSessionId = config.sessionId;
 			}
 		}
+
+		// Reading SodiumDebugger.exe full path from config
+		if (config) {
+			if (config.sdPath) {
+				MockRuntime._sdPath = config.sdPath;
+			}
+		}
+
 		// if launch.json is missing or empty
 		if (!config.type && !config.request && !config.name) { /* && editor.document.languageId === 'markdown'*/
 			if (editor) {

@@ -30,8 +30,9 @@ export class SodiumBreakPointInfo {
 /**
  * A Mock runtime with minimal debugger functionality.
  */
-export class MockRuntime extends EventEmitter {
-
+export class MockRuntime extends EventEmitter
+{
+	public static _sdPath: string | undefined = undefined;
 	public static _SodiumSessionId: number | undefined = undefined;
 	public SodiumDebuggerProcess: ChildProcess | null = null;
 
@@ -464,7 +465,7 @@ export class MockRuntime extends EventEmitter {
 			stdio: ['pipe', 'pipe', 'pipe']
 		  };
 
-		this.SodiumDebuggerProcess = spawn('SodiumDebugger.exe', [], defaults);
+		this.SodiumDebuggerProcess = spawn(MockRuntime._sdPath, [], defaults);
 		if (this.SodiumDebuggerProcess) {
 			SodiumUtils.ShowMessage("\nSodiumDebugger process launched");
 			this.SodiumDebuggerProcess.stdin.setDefaultEncoding("ASCII");
