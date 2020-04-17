@@ -3,6 +3,7 @@
  * by Murad Karakaş
  *--------------------------------------------------------*/
 
+import * as vscode from 'vscode';
 import { window, InputBoxOptions } from 'vscode';
 import { Mutex } from 'await-semaphore';
 import { MockRuntime } from './mockRuntime';
@@ -36,6 +37,11 @@ export class SodiumUtils
 			runtime.SodiumDebuggerProcess.stdin.uncork();
 			console.log(">>> COMMAND (" + SodiumUtils.commandCounter + "): " + command);
 		}
+	}
+
+	public static ShowMessage(message: string)
+	{
+		vscode.window.showInformationMessage("SD: " + message);
 	}
 
 	public static SanitizePathForSodiumDebugger(path: string): string

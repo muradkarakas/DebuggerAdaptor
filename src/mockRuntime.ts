@@ -32,7 +32,7 @@ export class SodiumBreakPointInfo {
  */
 export class MockRuntime extends EventEmitter {
 
-	private _SodiumSessionId: string | undefined = undefined;
+	public static _SodiumSessionId: number | undefined = undefined;
 	public SodiumDebuggerProcess: ChildProcess | null = null;
 
 	public BreakPointHitInfo: SodiumBreakPointInfo = new SodiumBreakPointInfo();
@@ -104,8 +104,15 @@ export class MockRuntime extends EventEmitter {
 
 	public ParseDebuggerOutput(reply: string)
 	{
+		let noSessionFoundReplyMatched: number = reply.indexOf("No session found");
+		if (noSessionFoundReplyMatched == 0) {
+			SodiumUtils.ShowMessage("Session not found: " + MockRuntime._SodiumSessionId);
+			return;
+		}
+
 		let treadIdReplyMatched: any = reply.replace("\r\n", "").match(/\[New Thread (?<BreakpointId>\d+)\]/);
 		if (treadIdReplyMatched) {
+			SodiumUtils.ShowMessage("Attached to " + MockRuntime._SodiumSessionId);
 			return;
 		}
 
@@ -379,8 +386,8 @@ export class MockRuntime extends EventEmitter {
 		//this._breakAddresses.clear();
 	}
 
-	public isSodiumSessionIdSet(): string | undefined {
-		return this._SodiumSessionId;
+	public isSodiumSessionIdSet(): number | undefined {
+		return MockRuntime._SodiumSessionId;
 	}
 
 	/*
@@ -425,7 +432,7 @@ export class MockRuntime extends EventEmitter {
 	public sendAttachRequestToSodiumServer() {
 		if (this.SodiumDebuggerProcess){
 			let that = this;
-			let cmd = "attach " + that._SodiumSessionId + ";\r\n";
+			let cmd = "attach " + MockRuntime._SodiumSessionId + ";\r\n";
 			let p = SodiumUtils.WaitForStdout();
 			p.then(function () {
 				SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
@@ -440,12 +447,14 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	public async GetSodiumSessionId() {
-		let options: InputBoxOptions = {
-			prompt: "Sodium Session Id: ",
-			placeHolder: "ex: 75254",
-			value: "25222"
+		if (MockRuntime._SodiumSessionId === undefined) {
+			let options: InputBoxOptions = {
+				prompt: "Sodium Session Id: ",
+				placeHolder: "ex: 75254",
+				value: "0"
+			}
+			MockRuntime._SodiumSessionId = await SodiumUtils.GetInput(options);
 		}
-		this._SodiumSessionId = await SodiumUtils.GetInput(options);
 	}
 
 	public startSodiumDebuggerProcess() {
@@ -457,6 +466,7 @@ export class MockRuntime extends EventEmitter {
 
 		this.SodiumDebuggerProcess = spawn('C:\\projects\\Sodium\\Setup\\SodiumDebugger.exe', [], defaults);
 		if (this.SodiumDebuggerProcess) {
+			SodiumUtils.ShowMessage("\nSodiumDebugger process launched");
 			this.SodiumDebuggerProcess.stdin.setDefaultEncoding("ASCII");
 
 			this.SodiumDebuggerProcess.stdout.on('data', (data) => {
@@ -470,16 +480,16 @@ export class MockRuntime extends EventEmitter {
 				this.killSodiumDebuggerProcess();
 			});
 			this.SodiumDebuggerProcess.on('close', (code) => {
+				SodiumUtils.ShowMessage(`Communication between IDE and Sodium Debugger lost with code ${code}`);
 				this.sendEvent('end');
 				this.SodiumDebuggerProcess = null;
-				console.log(`Communication between IDE and Sodium Debugger lost with code ${code}`);
 			});
 			this.SodiumDebuggerProcess.on('exit', (code) => {
 				this.sendEvent('end');
 				this.SodiumDebuggerProcess = null;
 				switch(code) {
 					case 10: {
-						console.log(`Sodium Server is not running or not accessible !`);
+						SodiumUtils.ShowMessage("`Sodium Server is not running or not accessible !`");
 						break;
 					}
 				}

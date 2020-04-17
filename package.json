@@ -79,15 +79,9 @@
 								"description": "Absolute path to a text file.",
 								"default": "${workspaceFolder}/${command:AskForProgramName}"
 							},
-							"stopOnEntry": {
-								"type": "boolean",
-								"description": "Automatically stop after attach.",
-								"default": true
-							},
-							"trace": {
-								"type": "boolean",
-								"description": "Enable logging of the Debug Adapter Protocol.",
-								"default": true
+							"sessionId": {
+								"type": "number",
+								"description": "Sodium session id to attach."
 							}
 						}
 					}
@@ -98,8 +92,7 @@
 						"request": "attach",
 						"name": "Sodium Debugger",
 						"program": "${workspaceFolder}/${command:AskForProgramName}",
-						"stopOnEntry": false,
-						"trace": true
+						"sessionId": 0
 					}
 				],
 				"configurationSnippets": [
@@ -110,8 +103,7 @@
 							"type": "sodium",
 							"request": "attach",
 							"name": "Sodium Debugger",
-							"program": "^\"\\${workspaceFolder}/\\${command:AskForProgramName}\"",
-							"stopOnEntry": false
+							"program": "^\"\\${workspaceFolder}/\\${command:AskForProgramName}\""
 						}
 					}
 				],

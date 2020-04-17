@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { WorkspaceFolder, DebugConfiguration, ProviderResult, CancellationToken } from 'vscode';
 import { SodiumDebugSession } from './SodiumDebug';
 import * as Net from 'net';
+import { MockRuntime } from './mockRuntime';
 
 /*
  * The compile time flag 'runMode' controls how the debug adapter is run.
@@ -89,6 +90,11 @@ class SodiumConfigurationProvider implements vscode.DebugConfigurationProvider {
 			}
 		}
 
+		if (config) {
+			if (config.sessionId) {
+				MockRuntime._SodiumSessionId = config.sessionId;
+			}
+		}
 		// if launch.json is missing or empty
 		if (!config.type && !config.request && !config.name) { /* && editor.document.languageId === 'markdown'*/
 			if (editor) {
@@ -96,7 +102,6 @@ class SodiumConfigurationProvider implements vscode.DebugConfigurationProvider {
 				config.name = 'Sodium Debugger';
 				config.request = 'attach';
 				config.program = editor.document.uri.fsPath;
-				config.stopOnEntry = true;
 			} else {
 				return vscode.window.showInformationMessage("SodiumDebugger: Open a file to debug").then(_ => {
 					return undefined;	// abort launch
