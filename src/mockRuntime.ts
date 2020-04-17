@@ -451,7 +451,7 @@ export class MockRuntime extends EventEmitter {
 			let options: InputBoxOptions = {
 				prompt: "Sodium Session Id: ",
 				placeHolder: "ex: 75254",
-				value: "0"
+				value: ""
 			}
 			MockRuntime._SodiumSessionId = await SodiumUtils.GetInput(options);
 		}
@@ -459,12 +459,12 @@ export class MockRuntime extends EventEmitter {
 
 	public startSodiumDebuggerProcess() {
 		const defaults = {
-			cwd: 'C:\\projects\\Sodium\\Setup\\',
+			cwd: '',
 			env: process.env,
 			stdio: ['pipe', 'pipe', 'pipe']
 		  };
 
-		this.SodiumDebuggerProcess = spawn('C:\\projects\\Sodium\\Setup\\SodiumDebugger.exe', [], defaults);
+		this.SodiumDebuggerProcess = spawn('SodiumDebugger.exe', [], defaults);
 		if (this.SodiumDebuggerProcess) {
 			SodiumUtils.ShowMessage("\nSodiumDebugger process launched");
 			this.SodiumDebuggerProcess.stdin.setDefaultEncoding("ASCII");
@@ -476,6 +476,7 @@ export class MockRuntime extends EventEmitter {
 			});
 			this.SodiumDebuggerProcess.stderr.on('data', (data) => {
 				let reply = data.toString();
+				SodiumUtils.ShowMessage(`Error: ${reply}`);
 				console.error(`stderr: ${reply}`);
 				this.killSodiumDebuggerProcess();
 			});
@@ -485,15 +486,18 @@ export class MockRuntime extends EventEmitter {
 				this.SodiumDebuggerProcess = null;
 			});
 			this.SodiumDebuggerProcess.on('exit', (code) => {
-				this.sendEvent('end');
-				this.SodiumDebuggerProcess = null;
 				switch(code) {
 					case 10: {
-						SodiumUtils.ShowMessage("`Sodium Server is not running or not accessible !`");
+						SodiumUtils.ShowMessage(`Sodium Server is not running or not accessible !`);
+						break;
+					}
+					default: {
+						SodiumUtils.ShowMessage(`Sodium Server is not running or not accessible ! Code: ${code}`);
 						break;
 					}
 				}
-
+				this.sendEvent('end');
+				this.SodiumDebuggerProcess = null;
 			});
 			this.SodiumDebuggerProcess.on('message', (m) => {
 				console.log('CHILD got message:', m);

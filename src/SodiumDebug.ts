@@ -110,7 +110,7 @@ export class SodiumDebugSession extends LoggingDebugSession
 	protected evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments, request?: DebugProtocol.Request): void
 	{
 		response.body = response.body || {};
-		response.body.result = "Not impelemted yet By Sodium Debugger Adaptor. All variables are shown in 'Variables' Pane in VS Code";
+		response.body.result = "Not implemented yet By Sodium Debugger Adaptor. All variables are shown in 'Variables' Pane in VS Code";
 		response.body.variablesReference = 0;
 		this.sendResponse(response);
 	}

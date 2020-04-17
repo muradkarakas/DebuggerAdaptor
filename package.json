@@ -3,7 +3,7 @@
 	"displayName": "Sodium Debug",
 	"version": "0.37.0",
 	"publisher": "muradkarakas",
-	"description": "Starter extension for developing debug adapters for VS Code.",
+	"description": "VS Code Debugger Adaptor Protocol Implementation for Sodium",
 	"author": {
 		"name": "Murad Karakas",
 		"email": "muradkarakas@gmail.com"
