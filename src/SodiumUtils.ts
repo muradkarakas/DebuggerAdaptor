@@ -14,12 +14,15 @@ export class SodiumUtils
 	public static mutex = new Mutex();
 	private static _stdoutResolver: Function | undefined;
 
-	public static ReleaseStdout(reply: string)
+	/*	if 'reply' is null, stdout will just be resolved.  */
+	public static ReleaseStdout(reply: string | null)
 	{
 		if (SodiumUtils._stdoutResolver) {
-			let message: string = "    > REPLIED (" + SodiumUtils.commandCounter++ + "): " + reply;
-			if (MockRuntime._trace)
-				console.log(message);
+			if (reply != null) {
+				let message: string = "    > REPLIED (" + SodiumUtils.commandCounter++ + "): " + reply;
+				if (MockRuntime._trace)
+					console.log(message);
+			}
 			SodiumUtils._stdoutResolver();
 		}
 		SodiumUtils._stdoutResolver = undefined;

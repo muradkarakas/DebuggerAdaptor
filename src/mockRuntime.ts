@@ -466,9 +466,12 @@ export class MockRuntime extends EventEmitter
 			stdio: ['pipe', 'pipe', 'pipe']
 		  };
 
+
+		  SodiumUtils.ReleaseStdout(null);
+
 		this.SodiumDebuggerProcess = spawn(MockRuntime._sdPath, [], defaults);
 		if (this.SodiumDebuggerProcess) {
-			SodiumUtils.ShowMessage("\nSodiumDebugger process launched");
+			SodiumUtils.ShowMessage("SodiumDebugger process launched");
 			this.SodiumDebuggerProcess.stdin.setDefaultEncoding("ASCII");
 
 			this.SodiumDebuggerProcess.stdout.on('data', (data) => {
