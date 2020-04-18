@@ -203,15 +203,6 @@ export class MockRuntime extends EventEmitter
 			}
 		}
 
-		/*let jsonArrayReplyMatched = reply.replace("\r\n", "").split("$").join("\\").match(/\[[a-zA-Z0-9\"\., \-\:\{\}\\\$_]*\]/);
-		if (jsonArrayReplyMatched) {
-			let json = JSON.parse(reply.split("$").join("\\\\").replace("\r\n", ""));
-			if (json) {
-
-				return;
-			}
-		}*/
-
 		// break command response
 		/*
 		 *	Breakpoint 2 at 0x0000:  file welcome.sqlx, line 6.
@@ -476,8 +467,13 @@ export class MockRuntime extends EventEmitter
 
 			this.SodiumDebuggerProcess.stdout.on('data', (data) => {
 				let reply = data.toString();
-				this.ParseDebuggerOutput(reply);
 				SodiumUtils.ReleaseStdout(reply);
+				try {
+					this.ParseDebuggerOutput(reply);
+				}
+				catch(e) {
+					console.error(`Couldn't parsed. Reply: ${reply}. Error: ${e}`);
+				}
 			});
 			this.SodiumDebuggerProcess.stderr.on('data', (data) => {
 				let reply = data.toString();
