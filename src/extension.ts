@@ -95,10 +95,12 @@ class SodiumConfigurationProvider implements vscode.DebugConfigurationProvider {
 			if (config.sessionId) {
 				MockRuntime._SodiumSessionId = config.sessionId;
 			}
-		}
+			// Reading trace parameter from config
+			if (config.trace) {
+				MockRuntime._trace = config.trace;
+			}
 
-		// Reading SodiumDebugger.exe full path from config
-		if (config) {
+			// Reading SodiumDebugger.exe full path from config
 			if (config.sdPath) {
 				MockRuntime._sdPath = config.sdPath;
 			}

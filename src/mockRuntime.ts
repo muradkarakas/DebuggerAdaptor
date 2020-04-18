@@ -33,6 +33,7 @@ export class SodiumBreakPointInfo {
 export class MockRuntime extends EventEmitter
 {
 	public static _sdPath: string | undefined = undefined;
+	public static _trace: boolean | undefined = undefined;
 	public static _SodiumSessionId: number | undefined = undefined;
 	public SodiumDebuggerProcess: ChildProcess | null = null;
 

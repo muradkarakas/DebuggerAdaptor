@@ -17,7 +17,9 @@ export class SodiumUtils
 	public static ReleaseStdout(reply: string)
 	{
 		if (SodiumUtils._stdoutResolver) {
-			console.log("    > REPLIED (" + SodiumUtils.commandCounter++ + "): " + reply);
+			let message: string = "    > REPLIED (" + SodiumUtils.commandCounter++ + "): " + reply;
+			if (MockRuntime._trace)
+				console.log(message);
 			SodiumUtils._stdoutResolver();
 		}
 		SodiumUtils._stdoutResolver = undefined;
@@ -32,10 +34,12 @@ export class SodiumUtils
 	public static SendCommandToSodiumDebugger(runtime: MockRuntime, command: string): void
 	{
 		if (runtime && runtime.SodiumDebuggerProcess != null) {
+			let message: string = ">>> COMMAND (" + SodiumUtils.commandCounter + "): " + command;
 			runtime.SodiumDebuggerProcess.stdin.cork();
 			runtime.SodiumDebuggerProcess.stdin.write(command);
 			runtime.SodiumDebuggerProcess.stdin.uncork();
-			console.log(">>> COMMAND (" + SodiumUtils.commandCounter + "): " + command);
+			if (MockRuntime._trace)
+				console.log(message);
 		}
 	}
 

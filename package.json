@@ -83,6 +83,11 @@
 								"type": "string",
 								"description": "Sodium Debugger path including file name.",
 								"default": "c:\\Sodium\\SodiumDebugger.exe"
+							},
+							"trace": {
+								"type": "boolean",
+								"description": "Print command & replies.",
+								"default": false
 							}
 						}
 					}
@@ -93,7 +98,8 @@
 						"request": "attach",
 						"name": "Sodium Debugger",
 						"sessionId": 0,
-						"sdPath": "c:\\Sodium\\SodiumDebugger.exe"
+						"sdPath": "c:\\Sodium\\SodiumDebugger.exe",
+						"trace": true
 					}
 				],
 				"configurationSnippets": [
@@ -105,7 +111,8 @@
 							"request": "attach",
 							"name": "Sodium Debugger",
 							"sessionId": 0,
-							"sdPath": "c:\\Sodium\\SodiumDebugger.exe"
+							"sdPath": "c:\\Sodium\\SodiumDebugger.exe",
+							"trace": true
 						}
 					}
 				],
