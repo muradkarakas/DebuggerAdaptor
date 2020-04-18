@@ -473,6 +473,7 @@ export class MockRuntime extends EventEmitter
 				}
 				catch(e) {
 					console.error(`Couldn't parsed. Reply: ${reply}. Error: ${e}`);
+					this.sendEvent('end');
 				}
 			});
 			this.SodiumDebuggerProcess.stderr.on('data', (data) => {
