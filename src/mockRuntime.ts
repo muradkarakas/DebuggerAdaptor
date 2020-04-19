@@ -349,7 +349,7 @@ export class MockRuntime extends EventEmitter
 	{
 		if (this.SodiumDebuggerProcess) {
 			let that = this;
-			let cmd = "clearallbreakpoints;\r\n";
+			let cmd = `clearallbreakpoints \"${path}\";\r\n`;
 			let p = SodiumUtils.WaitForStdout();
 			p.then(function () {
 				SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
