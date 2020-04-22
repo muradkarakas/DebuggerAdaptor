@@ -50,6 +50,7 @@ export class MockRuntime extends EventEmitter
 	public gGlobalsVarResponse: DebugProtocol.VariablesResponse;
 	public gStackTraceResponse: DebugProtocol.StackTraceResponse;
 	public gStackTraceArguments: DebugProtocol.StackTraceArguments;
+	public gEvaulateResponse: DebugProtocol.EvaluateResponse;
 
 	// Reference to debug session
 	private gMockDebugSession: SodiumDebugSession;
@@ -59,6 +60,21 @@ export class MockRuntime extends EventEmitter
 		super();
 		this.gMockDebugSession = mockDebugSession;
 		this.startSodiumDebuggerProcess();
+	}
+
+	public evaulate(debugsession: SodiumDebugSession, response: DebugProtocol.EvaluateResponse, expression: string)
+	{
+		if (this.SodiumDebuggerProcess) {
+			this.gEvaulateResponse = response;
+			let cmd = "whatis " + expression + ";\r\n";
+			let p = SodiumUtils.WaitForStdout();
+			let that = this;
+			p.then(function () {
+				SodiumUtils.SendCommandToSodiumDebugger(that, cmd);
+			});
+		} else {
+			this.sendEvent('end');
+		}
 	}
 
 	/**
@@ -127,8 +143,23 @@ export class MockRuntime extends EventEmitter
 			}
 		}
 
-		let jsonCandidate: any = reply.replace("\r\n", "").split("$").join("\\").match(/\[[a-zA-Z0-9\"., \:\{\}\]]*/);
-		if (jsonCandidate) {
+		let watchReplyMatched: any = reply.match(/\{ *"watch" *: *(?<Variable>\{[a-zA-Z0-9\"., \:\{\}\}]*) *\}/);
+		if (watchReplyMatched) {
+			let evaulateVariable = JSON.parse(watchReplyMatched.groups.Variable);
+			if (evaulateVariable) {
+				this.gEvaulateResponse.body = {
+					result: evaulateVariable.value,
+					variablesReference: 0,
+					namedVariables: 1
+				}
+				this.gMockDebugSession.sendResponse(this.gEvaulateResponse);
+				return;
+			}
+		}
+
+		// 	json array match
+		let jsonArrayCandidate: any = reply.replace("\r\n", "").split("$").join("\\").match(/\[[a-zA-Z0-9\"., \:\{\}\]]*/);
+		if (jsonArrayCandidate) {
 			let json = JSON.parse(reply.split("$").join("\\\\").replace("\r\n", ""));
 			if (json) {
 				if (json.frames) {
@@ -457,7 +488,6 @@ export class MockRuntime extends EventEmitter
 			stdio: ['pipe', 'pipe', 'pipe']
 		  };
 
-
 		  SodiumUtils.ReleaseStdout(null);
 
 		this.SodiumDebuggerProcess = spawn(MockRuntime._sdPath, [], defaults);
@@ -467,9 +497,9 @@ export class MockRuntime extends EventEmitter
 
 			this.SodiumDebuggerProcess.stdout.on('data', (data) => {
 				let reply = data.toString();
-				SodiumUtils.ReleaseStdout(reply);
 				try {
 					this.ParseDebuggerOutput(reply);
+					SodiumUtils.ReleaseStdout(reply);
 				}
 				catch(e) {
 					console.error(`Couldn't parsed. Reply: ${reply}. Error: ${e}`);

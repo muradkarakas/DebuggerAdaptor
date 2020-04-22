@@ -110,9 +110,13 @@ export class SodiumDebugSession extends LoggingDebugSession
 	protected evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments, request?: DebugProtocol.Request): void
 	{
 		response.body = response.body || {};
-		response.body.result = "Not implemented yet By Sodium Debugger Adaptor. All variables are shown in 'Variables' Pane in VS Code";
-		response.body.variablesReference = 0;
-		this.sendResponse(response);
+		if (args.context == "watch")
+		{
+			this._runtime.evaulate(this, response, args.expression);
+		}
+		//response.body.result = "Not implemented yet By Sodium Debugger Adaptor. All variables are shown in 'Variables' Pane in VS Code";
+		//response.body.variablesReference = 0;
+		//this.sendResponse(response);
 	}
 
 	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void
@@ -166,7 +170,7 @@ export class SodiumDebugSession extends LoggingDebugSession
 		response.body.supportsGotoTargetsRequest = false;
 
 		// This default debug adapter does not support the 'format' attribute on the 'variables', 'evaluate', and 'stackTrace' request.
-		response.body.supportsValueFormattingOptions = true;
+		response.body.supportsValueFormattingOptions = false;
 
 		response.body.supportsRestartFrame = false;
 
